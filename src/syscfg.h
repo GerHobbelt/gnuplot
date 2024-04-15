@@ -378,7 +378,7 @@ typedef RETSIGTYPE (*sigfunc) (void);
 #if HAVE_STDBOOL_H
 # include <stdbool.h>
 #else
-# if ! HAVE__BOOL
+# if !HAVE__BOOL && !defined(_MSC_VER)
 #  ifdef __cplusplus
 typedef bool _Bool;
 #  else

@@ -174,7 +174,7 @@ cbGetTextWindow(HWND  hwnd, LPARAM  lParam)
     /* save the value of the parent window */
     hwndParent = hwnd;
     /* check to see if it has a child text window */
-    hwndText = FindWindowEx(hwnd, NULL, TEXTCLASS, NULL);
+    hwndText = FindWindowExA(hwnd, NULL, TEXTCLASS, NULL);
 
     /* if the text window was found, stop looking */
     return (hwndText == NULL);
@@ -225,7 +225,7 @@ main (int argc, char *argv[])
 {
     char    psBuffer[BUFFER_SIZE];
     char    psGnuplotCommandLine[MAX_PATH] = PROGNAME;
-    LPTSTR  psCmdLine;
+    LPSTR   psCmdLine;
     BOOL    bSuccess;
     BOOL    bPersist = FALSE;
     int	i;
@@ -276,7 +276,7 @@ main (int argc, char *argv[])
 
     /* CRS 30061999: Search for the first unquoted space. This should
        separate the program name from the arguments. */
-    psCmdLine = FindUnquotedSpace(psCmdLine);
+    psCmdLine = FindUnquotedSpaceA(psCmdLine);
 
     strncat(psGnuplotCommandLine, psCmdLine, sizeof(psGnuplotCommandLine) - strlen(psGnuplotCommandLine)-1);
 
@@ -305,7 +305,7 @@ main (int argc, char *argv[])
     siStartInfo.dwFlags = STARTF_USESHOWWINDOW;
     siStartInfo.wShowWindow = SW_SHOWMINIMIZED;
 
-    bSuccess = CreateProcess(
+    bSuccess = CreateProcessA(
 			     NULL,                   /* pointer to name of executable module   */
 			     psGnuplotCommandLine,   /* pointer to command line string         */
 			     NULL,                   /* pointer to process security attributes */

@@ -1,3 +1,5 @@
+#if !defined(_WIN32)
+
 #define MOUSE_ALL_WINDOWS 1
 
 /* GNUPLOT - gplt_x11.c */
@@ -7301,3 +7303,5 @@ static int x11_check_for_toggle(plot_struct *plot, unsigned int x, unsigned int 
 }
 
 #endif /*USE_MOUSE*/
+
+#endif

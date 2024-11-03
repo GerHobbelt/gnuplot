@@ -199,8 +199,9 @@ struct mark_data {
     double xmin, xmax;
     double ymin, ymax;
     int vertices;
-    t_polygon polygon;
     int asize; /* number of allocated size of polygon.vertex and color array */
+    t_polygon polygon;
+    char *title;	/* will be reported by "show mark" */
     struct fill_style_type mark_fillstyle;
     struct t_colorspec mark_fillcolor;
 };
@@ -211,6 +212,7 @@ typedef enum mark_units_id {
     MARK_UNITS_PS
 } mark_units_id;
 
+/* Structure used in plot header */
 typedef struct marks_options {
     int tag;
     enum mark_units_id units;
@@ -676,9 +678,11 @@ extern struct object default_ellipse;
 	{0, LT_BLACK, 0, DASHTYPE_SOLID, 0, 0, 1.0, 0.0, DEFAULT_P_CHAR, BLACK_COLORSPEC, DEFAULT_DASHPATTERN}, \
 	{.polygon = {0, NULL} } }
 
+/* this is the default for a new mark */
 #define DEFAULT_MARK_FILLSTYLE {FS_DEFAULT, 100, 0, {TC_DEFAULT, -2, 0}}
+/* this is the default for a new object that holds a mark */
 #define DEFAULT_MARK_STYLE { NULL, -1, 0, OBJ_MARK, OBJ_CLIP, \
-	DEFAULT_MARK_FILLSTYLE, \
+	{FS_EMPTY, 100, 0, {TC_DEFAULT, -2, 0}}, \
 	{0, LT_BLACK, 0, DASHTYPE_SOLID, 0, 0, 1.0, 0.0, DEFAULT_P_CHAR, BLACK_COLORSPEC, DEFAULT_DASHPATTERN}, \
 	{.mark = {-1, {0,0,0,0.,0.,0.}, 1.0, 1.0, 0.0, MARK_UNITS_PS} } }
 
@@ -730,16 +734,6 @@ extern struct object default_ellipse;
 /* filledcurves style options set by 'set style [data|func] filledcurves opts' */
 extern filledcurves_opts filledcurves_opts_data;
 extern filledcurves_opts filledcurves_opts_func;
-
-/* "set style increment user"
- * causes plot commands to select line style N in preference to linetype N
- * (deprecated in 5.0)
- */
-#ifdef BACKWARD_COMPATIBILITY
-  extern TBOOLEAN prefer_line_styles;
-#else
-  #define prefer_line_styles FALSE
-#endif
 
 extern histogram_style histogram_opts;
 

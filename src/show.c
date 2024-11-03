@@ -181,7 +181,8 @@ static void show_ticdefp(struct axis *);
 static void show_functions(void);
 static void show_warnings(void);
 
-static void show_mark();
+static void show_one_mark(struct mark_data *mark);
+static void show_mark(void);
 
 static int var_show_all = 0;
 
@@ -1085,13 +1086,15 @@ show_version(FILE *fp)
 		"";
 #endif
 
+	    const char *got_marks = "+MARKS ";
+
 	    sprintf(compile_options,
-		    "    %s%s\n    %s%s\n    %s%s%s%s\n    %s\n    %s%s%s%s\n    %s%s\n",
+		    "    %s%s\n    %s%s\n    %s%s%s%s\n    %s\n    %s%s%s%s\n    %s%s%s\n",
 		    rdline, gnu_rdline, unicodebuild, plotoptions,
 		    complexfunc, libcerf, libamos, have_cexint,
 		    libgd,
 		    nocwdrc, x11, use_mouse, hiddenline,
-		    fblocks, chi_shapes
+		    fblocks, chi_shapes, got_marks
 		    );
 	}
 
@@ -2863,15 +2866,7 @@ show_hidden3d()
 static void
 show_increment()
 {
-#ifdef BACKWARD_COMPATIBILITY
-    fprintf(stderr,"\tPlot lines increment over ");
-    if (prefer_line_styles)
-	fprintf(stderr, "user-defined line styles rather than default line types\n");
-    else
-	fprintf(stderr, "default linetypes\n");
-#else
     fprintf(stderr,"\t'set style increment' is deprecated\n");
-#endif
 }
 
 static void
@@ -3689,12 +3684,15 @@ conv_text(const char *t)
 static void
 show_one_mark(struct mark_data *mark)
 {
-    fprintf(stderr, "\tmarktype %i, polygon vertices %i ", mark->tag, mark->vertices);
+    fprintf(stderr, "\tmarktype %i ", mark->tag);
+    if (mark->title)
+	fprintf(stderr, " title \"%s\" ", mark->title);
+    fprintf(stderr, "polygon vertices %i ", mark->vertices);
     if (mark->mark_fillcolor.type != TC_DEFAULT) {
 	fprintf(stderr, "fillcolor ");
 	save_pm3dcolor(stderr, &mark->mark_fillcolor);
     }
-    fprintf(stderr, " fillstyle");
+    fprintf(stderr, " fillstyle ");
     save_fillstyle(stderr, &mark->mark_fillstyle);
 }
 
@@ -3703,8 +3701,6 @@ show_mark()
 {
     int tag = -1;
     struct mark_data *this;
-    double x, y;
-    int i;
 
     if (!END_OF_COMMAND)
 	tag = int_expression();
@@ -3722,18 +3718,6 @@ show_mark()
 	return;
 
     show_one_mark(this);
-    
-    for (i=0; i<this->vertices; i++) {
-	int mode;
-        x = this->polygon.vertex[i].x;
-        y = this->polygon.vertex[i].y;
-        mode = this->polygon.vertex[i].z;
-        if (isnan(x) || isnan(y)) 
-	    fprintf(stderr,"\n");
-        else
-	    fprintf(stderr, "%g\t%g\t%i\n", x, y, mode);
-    }
-
     fprintf(stderr, "\n"); 
 }
 

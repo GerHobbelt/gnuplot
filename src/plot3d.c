@@ -327,15 +327,6 @@ plot3drequest()
 	axis_init(&axis_array[SECOND_Y_AXIS], FALSE);
     }
 
-    /* Always be prepared to restore the autoscaled values on "refresh"
-     * Dima Kogan April 2018
-     */
-    for (axis = 0; axis < NUMBER_OF_MAIN_VISIBLE_AXES; axis++) {
-	AXIS *this_axis = &axis_array[axis];
-	if (this_axis->set_autoscale != AUTOSCALE_NONE)
-	    this_axis->range_flags |= RANGE_WRITEBACK;
-    }
-
     /* Nonlinear mapping of x or y via linkage to a hidden primary axis. */
     /* The user set autoscale for the visible axis; apply it also to the hidden axis. */
     for (axis = 0; axis < NUMBER_OF_MAIN_VISIBLE_AXES; axis++) {
@@ -1001,13 +992,22 @@ get_3ddata(struct surface_points *this_plot)
 		n_complex_values++;
 		goto come_here_if_undefined;
 	    }
-	    cp->type = INRANGE;	/* unless we find out different */
 
-	    /* EAM Oct 2004 - Substantially rework this section */
-	    /* now that there are many more plot types.         */
+	    /* EXPERIMENTAL "splot .. if (<expr>)" */
+	    if (this_plot->if_filter_at) {
+		struct value keep;
+		evaluate_inside_using = TRUE;
+		evaluate_at(this_plot->if_filter_at, &keep);
+		evaluate_inside_using = FALSE;
+		if (undefined || isnan(real(&keep)) || real(&keep) == 0) {
+		    cp->type = UNDEFINED;
+		    goto come_here_if_undefined;
+		}
+	    }
 
 	    x = y = z = 0.0;
 	    xtail = ytail = ztail = 0.0;
+	    cp->type = INRANGE;	/* unless we find out otherwise */
 
 	    /* The x, y, z coordinates depend on the mapping type */
 	    switch (mapping3d) {
@@ -1157,7 +1157,7 @@ get_3ddata(struct surface_points *this_plot)
 		if (j < varcol)
 		    int_error(NO_CARET, "Not enough input columns");
 		if (j == varcol)
-		    color = this_plot->fill_properties.border_color.lt;
+		    color = z;
 		else
 		    color = v[varcol];
 		color_from_column(TRUE);
@@ -2178,6 +2178,19 @@ eval_3dplots()
 		    }
 		    if (stored_token != c_token)
 			continue;
+		}
+
+		/* EXPERIMENTAL filter splot ... if (<expression>) */
+		if (equals(c_token,"if")) {
+		    if (this_plot->plot_type != DATA3D)
+			int_error(c_token, "'if' restriction not possible here");
+		    if (this_plot->if_filter_at) {
+			duplication = TRUE;
+			break;
+		    }
+		    c_token++;
+		    this_plot->if_filter_at = perm_at();
+		    continue;
 		}
 
 		break; /* unknown option */

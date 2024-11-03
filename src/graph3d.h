@@ -104,8 +104,9 @@ typedef struct surface_points {
     struct udvt_entry *sample_var;	/* used by '+' if plot has private sampling range */
     struct udvt_entry *sample_var2;	/* used by '++' if plot has private sampling range */
     struct udft_entry plot_function;	/* action table and dummy variables for function plot */
-    enum PLOT_FILTER plot_filter; /* currently only "mask" */
-    enum PLOT_SMOOTH plot_smooth; /* smooth lines in 3D */
+    enum PLOT_FILTER plot_filter;	/* currently only "mask" */
+    enum PLOT_SMOOTH plot_smooth; 	/* smooth lines in 3D */
+    struct at_type *if_filter_at;   	/* plot ... if (<expression>) */
 
     /* 2D and 3D plot structure fields overlay only to this point */
 
@@ -115,6 +116,7 @@ typedef struct surface_points {
     TBOOLEAN opt_out_of_dgrid3d;  /* set by "nogrid" option to splot command */
     TBOOLEAN pm3d_color_from_column;
     TBOOLEAN has_grid_topology;
+    TBOOLEAN contourz_at_base;    /* set by "with contourfill at base" */
     int hidden3d_top_linetype;	/* before any calls to load_linetype() */
     void *iteration;		/* needed for tracking iteration */
 

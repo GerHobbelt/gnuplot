@@ -1521,7 +1521,6 @@ do_3dplot(
 							      * this_plot->lp_properties.l_width;
 			    thiscontour_lp_properties.d_type = ls.d_type;
 			    thiscontour_lp_properties.custom_dash_pattern = ls.custom_dash_pattern;
-//			    term_apply_lp_properties(&thiscontour_lp_properties);
 			}
 
 			/* Key entry */
@@ -4337,7 +4336,6 @@ plot3d_contourfill(struct surface_points *plot)
      */
     for (level = 0; level < nslices; level++) {
 	plot->zclip_index = level;
-	plot->fill_properties.border_color = slice[level].color;
 	pm3d_draw_one(plot);
     }
 }

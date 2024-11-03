@@ -84,7 +84,6 @@ static double harmean4(double, double, double, double);
 static double median4(double, double, double, double);
 static double rms4(double, double, double, double);
 static void pm3d_plot(struct surface_points *, int);
-static void pm3d_option_at_error(void);
 static void pm3d_rearrange_part(struct iso_curve *, const int, struct iso_curve ***, int *);
 static int apply_lighting_model(struct coordinate *, struct coordinate *,
 				struct coordinate *, struct coordinate *,
@@ -491,6 +490,7 @@ pm3d_plot(struct surface_points *this_plot, int at_which_z)
     TBOOLEAN color_from_column = FALSE;
     TBOOLEAN color_from_fillcolor = FALSE;
     udvt_entry *private_colormap = NULL;
+    t_colorspec fillcolorspec;
 
     /* should never happen */
     if (this_plot == NULL)
@@ -504,8 +504,11 @@ pm3d_plot(struct surface_points *this_plot, int at_which_z)
     &&  this_plot->lp_properties.pm3d_color.value == -1)
 	color_from_rgbvar = TRUE;
 
-    if (this_plot->fill_properties.border_color.type == TC_RGB
-    ||  this_plot->fill_properties.border_color.type == TC_LINESTYLE) {
+    if (this_plot->plot_style == CONTOURFILL)
+	fillcolorspec = this_plot->zclip[this_plot->zclip_index].color;
+    else
+	fillcolorspec = this_plot->fill_properties.border_color;
+    if (fillcolorspec.type == TC_RGB || fillcolorspec.type == TC_LINESTYLE) {
 	color_from_rgbvar = TRUE;
 	color_from_fillcolor = TRUE;
     }
@@ -526,15 +529,13 @@ pm3d_plot(struct surface_points *this_plot, int at_which_z)
     if (pm3d.direction != PM3D_DEPTH)
 	term->layer(TERM_LAYER_BEGIN_PM3D_MAP);
 
-    switch (at_which_z) {
-    case PM3D_AT_BASE:
+    /* Pre-load the z coordinate used for each top or bottom tile.
+     * If the mode is PM3D_AT_SURFACE the z value will be filled in later.
+     */
+    if (at_which_z == PM3D_AT_BASE)
 	corners[0].z = corners[1].z = corners[2].z = corners[3].z = base_z;
-	break;
-    case PM3D_AT_TOP:
+    if (at_which_z == PM3D_AT_TOP)
 	corners[0].z = corners[1].z = corners[2].z = corners[3].z = ceiling_z;
-	break;
-	/* the 3rd possibility is surface, PM3D_AT_SURFACE, coded below */
-    }
 
     scanA = this_plot->iso_crvs;
 
@@ -723,11 +724,11 @@ pm3d_plot(struct surface_points *this_plot, int at_which_z)
 		    cb4 = pointsB[ii1].CRD_COLOR;
 		} else if (color_from_fillcolor) {
 		    /* color is set by "fc <rgbvalue>" */
-		    cb1 = cb2 = cb3 = cb4 = this_plot->fill_properties.border_color.lt;
+		    cb1 = cb2 = cb3 = cb4 = fillcolorspec.lt;
 		    /* pm3d fc linestyle N generates
 		     * top/bottom color difference as with hidden3d
 		     */
-		    if (this_plot->fill_properties.border_color.type == TC_LINESTYLE) {
+		    if (fillcolorspec.type == TC_LINESTYLE) {
 			struct lp_style_type style;
 			int side = pm3d_side( &pointsA[i], &pointsA[i1], &pointsB[ii]);
 			lp_use_properties(&style, side < 0 ? cb1 + 1 : cb1);
@@ -818,6 +819,7 @@ pm3d_plot(struct surface_points *this_plot, int at_which_z)
 		}
 
 		/* set the color */
+		/* FIXME: setting the color is pointless if we end up not drawing the tile */
 		if (pm3d.direction != PM3D_DEPTH) {
 		    if (color_from_rgbvar || pm3d_shade.strength > 0)
 			set_rgbcolor_var((unsigned int)gray);
@@ -957,11 +959,11 @@ pm3d_plot(struct surface_points *this_plot, int at_which_z)
 
 			if (color_from_fillcolor) {
 			    /* color is set by "fc <rgbval>" */
-			    gray = this_plot->fill_properties.border_color.lt;
+			    gray = fillcolorspec.lt;
 			    /* pm3d fc linestyle N generates
 			     * top/bottom color difference as with hidden3d
 			     */
-			    if (this_plot->fill_properties.border_color.type == TC_LINESTYLE) {
+			    if (fillcolorspec.type == TC_LINESTYLE) {
 				struct lp_style_type style;
 				int side = pm3d_side( &pointsA[i], &pointsB[ii], &pointsB[ii1]);
 				lp_use_properties(&style, side < 0 ? gray + 1 : gray);
@@ -1308,45 +1310,30 @@ pm3d_add_polygon(struct surface_points *plot, gpdPoint corners[], int vertices)
 }
 
 
-
-/* Display an error message for the routine get_pm3d_at_option() below.
- */
-static void
-pm3d_option_at_error()
-{
-    int_error(c_token, "\
-parameter to `pm3d at` requires combination of up to 6 characters b,s,t\n\
-\t(drawing at bottom, surface, top)");
-}
-
-
-/* Read the option for 'pm3d at' command.
+/* Read the option string for 'pm3d at' command.
  * Used by 'set pm3d at ...' or by 'splot ... with pm3d at ...'.
- * If no option given, then returns empty string, otherwise copied there.
- * The string is unchanged on error, and 1 is returned.
- * On success, 0 is returned.
  */
-int
+void
 get_pm3d_at_option(char *pm3d_where)
 {
-    char* c;
+    char *at_error_msg = "\
+`pm3d at` requires a sequence of up to 6 characters b,s,t\n\
+\t(drawing at bottom, surface, top)";
+    char *c;
 
-    if (END_OF_COMMAND || token[c_token].length >= sizeof(pm3d.where)) {
-	pm3d_option_at_error();
-	return 1;
-    }
+    c_token++;
+    if (END_OF_COMMAND || token[c_token].length >= sizeof(pm3d.where))
+	int_error(c_token, at_error_msg);
+
     memcpy(pm3d_where, gp_input_line + token[c_token].start_index,
-	   token[c_token].length);
+           token[c_token].length);
     pm3d_where[ token[c_token].length ] = 0;
-    /* verify the parameter */
+
     for (c = pm3d_where; *c; c++) {
-	    if (*c != PM3D_AT_BASE && *c != PM3D_AT_TOP && *c != PM3D_AT_SURFACE) {
-		pm3d_option_at_error();
-		return 1;
-	}
+	if (*c != PM3D_AT_BASE && *c != PM3D_AT_TOP && *c != PM3D_AT_SURFACE)
+	    int_error(c_token, at_error_msg);
     }
     c_token++;
-    return 0;
 }
 
 /* Set flag plot_has_palette to TRUE if there is any element in the
@@ -1670,8 +1657,6 @@ filled_polygon(struct surface_points *from_plot, int index, gpdPoint *corners, i
      * (pm3d at [tb]) from surface quadrangles (pm3d at s).
      * The original z values have been replaced by base_z or ceiling_z,
      * so we can identify base plane quadrangles by testing for z == base_z.
-     * FIXME: However that means it is too late to get smooth z clipping for
-     *        the top/bottom plane contents.
      */
     if (pm3d.clip == PM3D_CLIP_Z) {
 	int new = 0;
@@ -1686,6 +1671,13 @@ filled_polygon(struct surface_points *from_plot, int index, gpdPoint *corners, i
 	    nv = new;
 	    corners = clipcorners;
 	}
+    }
+
+    /* projection to base plane */
+    if (from_plot && (from_plot->plot_style == CONTOURFILL)
+    &&  (from_plot->contourz_at_base)) {
+	for (i=0; i<nv; i++)
+	    corners[i].z = base_z;
     }
 
     for (i = 0; i < nv; i++) {
@@ -1720,9 +1712,13 @@ filled_polygon(struct surface_points *from_plot, int index, gpdPoint *corners, i
 
     term->filled_polygon(nv, icorners);
 
-    /* FIXME: Should this apply to other plot styles as well? */
-    /*        Should we apply a full set of line properties?  */
-    if (from_plot && from_plot->plot_style == BOXES) {
+    if (from_plot && (from_plot->plot_style == CONTOURFILL)) {
+	t_colorspec *bordercolor = &(from_plot->fill_properties.border_color);
+	if (bordercolor->type == TC_LT && bordercolor->lt == LT_NODRAW)
+	    return;
+	if (bordercolor->type != TC_DEFAULT)
+	    apply_pm3dcolor(bordercolor);
+    } else if (from_plot &&  (from_plot->plot_style == BOXES)) {
 	t_colorspec *bordercolor = &(from_plot->fill_properties.border_color);
 	if (bordercolor->type == TC_LT && bordercolor->lt == LT_NODRAW)
 	    return;

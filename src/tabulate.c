@@ -59,7 +59,6 @@ FILE *table_outfile = NULL;
 udvt_entry *table_var = NULL;
 TBOOLEAN table_mode = FALSE;
 char *table_sep = NULL;
-struct at_type *table_filter_at = NULL;
 
 static char *expand_newline(const char *in);
 static TBOOLEAN blanks_needed(curve_points *this_plot);
@@ -305,10 +304,8 @@ print_table(struct curve_points *current_plot, int plot_num)
 			OUTPUT_NUMBER((point->yhigh - point->y), current_plot->y_axis);
 			break;
 		    case POINTSTYLE:
-			if (current_plot->plot_filter == FILTER_ZSORT) {
-			    snprintf(buffer, BUFFERSIZE, "%g ", point->z);
-			    len = strappend(&line, &size, len, buffer);
-			}
+			if (current_plot->plot_filter == FILTER_ZSORT)
+			    OUTPUT_NUMBER(point->z, FIRST_Z_AXIS);
 			break;
 		    case LINES:
 		    case LINESPOINTS:
@@ -439,7 +436,7 @@ print_3dtable(int pcount)
 	    continue;
 	}
 
-	if (draw_surface) {
+	if (draw_surface && !this_plot->opt_out_of_surface) {
 	    struct iso_curve *icrvs;
 	    int curve;
 
@@ -508,7 +505,7 @@ print_3dtable(int pcount)
 	    print_line("");
 	} /* if (draw_surface) */
 
-	if (draw_contour) {
+	if (draw_contour && ! this_plot->opt_out_of_contours) {
 	    int number = 0;
 	    struct gnuplot_contours *c = this_plot->contours;
 
@@ -605,15 +602,15 @@ blanks_needed(curve_points *this_plot)
  * Called from plot2d.c (get_data) for "plot with table"
  */
 TBOOLEAN
-tabulate_one_line(double v[], struct value str[], int ncols)
+tabulate_one_line(struct curve_points *plot, double v[], struct value str[], int ncols)
 {
     int col;
     FILE *outfile = (table_outfile) ? table_outfile : gpoutfile;
     struct value keep;
 
-    if (table_filter_at) {
+    if (plot->if_filter_at) {
 	evaluate_inside_using = TRUE;
-	evaluate_at(table_filter_at, &keep);
+	evaluate_at(plot->if_filter_at, &keep);
 	evaluate_inside_using = FALSE;
 	if (undefined || isnan(real(&keep)) || real(&keep) == 0)
 	    return FALSE;

@@ -1433,21 +1433,21 @@ get_data(struct curve_points *current_plot)
 	case MARKS:
 	case LINESMARKS:
 	{   /*  x y
-		x y scale
-		x y xscale yscale 
-                x y xscale yscale angle
+	     *	x y scale
+	     *	x y xscale yscale
+             *  x y xscale yscale angle
 	     */
-    	    int var = j; /* column number */
+	    int var = j; /* column number */
 	    coordval x      = v[0]; /* x */
 	    coordval y      = v[1]; /* y */
 	    coordval xlow   = 1;    /* CRD_PTSIZE */
 	    coordval xhigh;         /* xscale */
 	    coordval ylow;          /* yscale */
             coordval yhigh;         /* angle */
-            coordval tag    = -1;   /* tag */
+            coordval tag    = current_plot->marks_options.tag;
 	    if (current_plot->lp_properties.p_size == PTSZ_VARIABLE)
                 xlow = v[--var];
-	    if (current_plot->marks_options.variable) /* mt variable */
+	    if (tag == MARK_TYPE_VARIABLE) /* mt variable */
 		tag = v[--var];
             xhigh = (var >= 3) ? v[2] : 1.0;
 	    ylow  = (var >= 4) ? v[3] : xhigh;
@@ -1551,7 +1551,7 @@ store2d_point(
 
 	/* Some plot styles use xhigh and yhigh for other quantities, */
 	/* which polar mode transforms would break		      */
-	if (current_plot->plot_style == MARKS || current_plot->plot_style == LINESMARKS) 
+	if (current_plot->plot_style == MARKS || current_plot->plot_style == LINESMARKS)
            ;
 	else if (current_plot->plot_style == CIRCLES) {
 	    double radius = (xhigh - xlow)/2.0;
@@ -1642,8 +1642,8 @@ store2d_point(
         cp->ylow  = ylow;
         cp->yhigh = yhigh;
 	break;
-    case MARKS: 
-    case LINESMARKS: 
+    case MARKS:
+    case LINESMARKS:
         cp->xlow  = xlow;
         cp->xhigh = xhigh;
         cp->ylow  = ylow;
@@ -2866,42 +2866,33 @@ eval_plots()
 		    }
 		}
 
-		/* pick up the special 'tag' keyword the 'marks' style requires */
-		if (this_plot->plot_style == MARKS 
+		/* options specific to marks */
+		if (this_plot->plot_style == MARKS
 		||  this_plot->plot_style == LINESMARKS) {
 		    if (almost_equals(c_token,"mark$type") || equals(c_token, "mt")) {
 			c_token++;
-                        if (almost_equals(c_token, "var$iable")) {
-                           this_plot->marks_options.variable = TRUE;
-                           c_token++;                                
-                        } else 
-  			   this_plot->marks_options.tag = int_expression();
-    		        continue;
+			if (almost_equals(c_token, "var$iable")) {
+			    this_plot->marks_options.tag = MARK_TYPE_VARIABLE;
+			    c_token++;
+			} else {
+			    i = int_expression();
+			    if (i >= 0)
+				this_plot->marks_options.tag = i;
+			    else
+				int_error(c_token,"mark type must be >= 0");
+			}
+			continue;
 		    }
 		    
 		    if (almost_equals(c_token,"unit$s")) {
+			mark_units_id units = lookup_table(mark_units_tbl, ++c_token);
+			if (units < 0)
+			    int_error(c_token, "expecting 'xy', 'xx', 'yy', 'gxy', 'gxx', 'gyy', or 'ps'" );
+			this_plot->marks_options.units = units;
 			c_token++;
-		        if (equals(c_token,"xy")) {
-		            this_plot->marks_options.units = MARK_UNITS_XY;
-		        } else if (equals(c_token,"xx")) {
-		            this_plot->marks_options.units = MARK_UNITS_XX;
-		        } else if (equals(c_token,"yy")) {
-		            this_plot->marks_options.units = MARK_UNITS_YY;
-		        } else if (equals(c_token,"gxy")) {
-		            this_plot->marks_options.units = MARK_UNITS_GXY;
-		        } else if (equals(c_token,"gxx")) {
-		            this_plot->marks_options.units = MARK_UNITS_GXX;
-		        } else if (equals(c_token,"gyy")) {
-		            this_plot->marks_options.units = MARK_UNITS_GYY;
-		        } else if (equals(c_token,"ps")) {
-		            this_plot->marks_options.units = MARK_UNITS_PS;
-		        } else {
-		            int_error(c_token, "expecting 'xy', 'xx', 'yy', 'gxy', 'gxx', 'gyy', or 'ps'" );
-		        }
-		        c_token++;
 			continue;
 		    }
-	        }
+		}
 
 		/* pick up the special 'units' keyword the 'ellipses' style allows */
 		if (this_plot->plot_style == ELLIPSES || this_plot->plot_style == SECTORS) {
@@ -3911,7 +3902,7 @@ eval_plots()
 				    this_plot->points[i].type, y_axis,
 				    TRUE, NOOP);
 			    }
-			    
+
 			    /* Fill in additional fields needed to draw a circle */
 			    if (this_plot->plot_style == CIRCLES) {
 				this_plot->points[i].z = DEFAULT_RADIUS;

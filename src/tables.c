@@ -163,6 +163,7 @@ const struct gen_table save_tbl[] =
     { "data$blocks", SAVE_DATABLOCKS },
     { "fit", SAVE_FIT },
     { "fun$ctions", SAVE_FUNCS },
+    { "marks", SAVE_MARKS },
     { "set", SAVE_SET },
     { "ter$minal", SAVE_TERMINAL },
     { "var$iables", SAVE_VARS },
@@ -786,6 +787,19 @@ const struct gen_table filledcurves_opts_tbl[] =
     { "below", FILLEDCURVES_BELOW },
     { "between", FILLEDCURVES_BETWEEN },
     { "y",  FILLEDCURVES_Y1 },
+    { NULL, -1 }
+};
+
+const struct gen_table mark_units_tbl[] =
+{
+    { "xy", MARK_UNITS_XY },
+    { "xx", MARK_UNITS_XX },
+    { "yy", MARK_UNITS_YY },
+    { "xy", MARK_UNITS_XY },
+    { "gxy", MARK_UNITS_GXY },
+    { "gxy", MARK_UNITS_GXY },
+    { "gxy", MARK_UNITS_GXY },
+    { "ps", MARK_UNITS_PS },
     { NULL, -1 }
 };
 

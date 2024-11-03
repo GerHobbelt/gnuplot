@@ -200,25 +200,25 @@ struct mark_data {
     double ymin, ymax;
     int vertices;
     t_polygon polygon;
-    double *color;
+    int asize; /* number of allocated size of polygon.vertex and color array */
+    struct fill_style_type mark_fillstyle;
+    struct t_colorspec mark_fillcolor;
 };
 
-#define MARK_UNITS_XY  (0)
-#define MARK_UNITS_XX  (1)
-#define MARK_UNITS_YY  (2)
-#define MARK_UNITS_GXY (3)
-#define MARK_UNITS_GXX (4)
-#define MARK_UNITS_GYY (5)
-#define MARK_UNITS_PS  (6)
-#define MARK_MAX_VERTICES 0xffff
+typedef enum mark_units_id {
+    MARK_UNITS_XY=0, MARK_UNITS_XX, MARK_UNITS_YY,
+    MARK_UNITS_GXY, MARK_UNITS_GXX, MARK_UNITS_GYY,
+    MARK_UNITS_PS
+} mark_units_id;
 
 typedef struct marks_options {
     int tag;
-    int units;
-    int variable;
+    enum mark_units_id units;
 } marks_opts;
 
-#define DEFAULT_MARKS_OPTS { 1, MARK_UNITS_PS, FALSE }
+#define MARK_TYPE_VARIABLE -1	/* tag value indicating "marktype variable" */
+#define MARK_MAX_VERTICES 1024	/* admittedly arbitrary */
+#define DEFAULT_MARKS_OPTS { 1, MARK_UNITS_PS }
 
 /* Datastructure implementing 'set dashtype' */
 struct custom_dashtype_def {
@@ -529,8 +529,6 @@ extern struct pa_style parallel_axis_style;
 extern struct object *first_object;
 extern struct object grid_wall[];
 
-extern struct mark_data *first_mark;
-
 extern text_label title;
 
 extern text_label timelabel;
@@ -678,10 +676,11 @@ extern struct object default_ellipse;
 	{0, LT_BLACK, 0, DASHTYPE_SOLID, 0, 0, 1.0, 0.0, DEFAULT_P_CHAR, BLACK_COLORSPEC, DEFAULT_DASHPATTERN}, \
 	{.polygon = {0, NULL} } }
 
+#define DEFAULT_MARK_FILLSTYLE {FS_DEFAULT, 100, 0, {TC_DEFAULT, -2, 0}}
 #define DEFAULT_MARK_STYLE { NULL, -1, 0, OBJ_MARK, OBJ_CLIP, \
-	{FS_EMPTY, 100, 0, {TC_DEFAULT, -2, 0}},   			\
+	DEFAULT_MARK_FILLSTYLE, \
 	{0, LT_BLACK, 0, DASHTYPE_SOLID, 0, 0, 1.0, 0.0, DEFAULT_P_CHAR, BLACK_COLORSPEC, DEFAULT_DASHPATTERN}, \
-	{.mark = {1, {0,0,0,0.,0.,0.}, 1.0, 1.0, 0.0, MARK_UNITS_PS} } }
+	{.mark = {-1, {0,0,0,0.,0.,0.}, 1.0, 1.0, 0.0, MARK_UNITS_PS} } }
 
 #define WALL_Y0_TAG 0
 #define WALL_X0_TAG 1
@@ -769,5 +768,10 @@ extern struct iso_curve *mask_2Dpolygon_set;
 extern struct iso_curve *mask_3Dpolygon_set;
 extern void construct_2D_mask_set(struct coordinate *points, int p_count);
 extern TBOOLEAN masked(double x, double y, struct iso_curve *mask_polygon_set);
+
+void free_mark (struct mark_data *mark);
+extern struct mark_data *first_mark;
+struct mark_data *get_mark(struct mark_data *first, int tag);
+
 
 #endif /* GNUPLOT_GADGETS_H */

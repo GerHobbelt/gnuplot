@@ -4346,12 +4346,26 @@ plot_boxplot(struct curve_points *plot, TBOOLEAN only_autoscale)
 	    plot->p_count = save_count;
 	}
 
-	/* Now draw individual points for the outliers */
+	/* Now draw individual points for the outliers.
+	 * There are two mechanisms by which you might adjust the placement
+	 * 1) "set jitter spread <scale>" changes the spacing
+	 * 2) using a character as a point symbol allows you to change the font
+	 *    and control the spacing with pointsize (ignored for character points)
+	 */
 	outliers:
 	if (boxplot_opts.outliers) {
 	    int i,j,x,y;
-	    int p_width = term->h_tic * plot->lp_properties.p_size;
-	    int p_height = term->v_tic * plot->lp_properties.p_size;
+	    int p_width = abs(term->h_tic * plot->lp_properties.p_size);
+	    int p_height = abs(term->v_tic * plot->lp_properties.p_size)/2;
+
+	    if (jitter.spread > 0)
+		p_width *= jitter.spread;
+
+	    if (plot->lp_properties.p_type == PT_CHARACTER) {
+		if (plot->labels->font && plot->labels->font[0])
+		    (term->set_font) (plot->labels->font);
+		(term->justify_text) (CENTRE);
+	    }
 
 	    for (i = 0; i < subset_count; i++) {
 
@@ -4372,12 +4386,27 @@ plot_boxplot(struct curve_points *plot, TBOOLEAN only_autoscale)
 		||  y > plot_bounds.ytop - p_height)
 			continue;
 
-		/* Separate any duplicate outliers */
-		for (j=1; (i >= j) && (subset_points[i].y == subset_points[i-j].y); j++)
+		/* Separate (jitter) any outliers with overlapping y coordinate */
+		for (j=1; (i >= j); j++) {
+		    int yj = map_y(subset_points[i-j].y);
+		    if (abs(yj - y) > p_height)
+			break;
 		    x += p_width * ((j & 1) == 0 ? -j : j);;
+		}
 
-		(term->point) (x, y, plot->lp_properties.p_type);
+		/* Accept a character as a point symbol */
+		if (plot->lp_properties.p_type == PT_CHARACTER)
+		    (term->put_text) (x, y, plot->lp_properties.p_char);
+		else if (plot->lp_properties.p_type >= -1)
+		    (term->point) (x, y, plot->lp_properties.p_type);
 	    }
+
+	    /* Restore initial state */
+	    if (plot->lp_properties.p_type == PT_CHARACTER) {
+		if (plot->labels->font && plot->labels->font[0])
+		    (term->set_font) ("");
+	    }
+
 	}
 
     }

@@ -1196,7 +1196,6 @@ do_3dplot(
 	    /* First draw the graph plot itself */
 	    if (!key_pass && this_plot->plot_type != KEYENTRY && this_plot->plot_type != VOXELDATA)
 	    switch (this_plot->plot_style) {
-	    case FILLEDCURVES:	/* same, but maybe we could dummy up ZERRORFILL? */
 	    case IMPULSES:
 		if (!hidden3d)
 		    plot3d_impulses(this_plot);
@@ -1249,6 +1248,7 @@ do_3dplot(
 		break;
 
 	    case ZERRORFILL:
+	    case FILLEDCURVES:
 		if (term->filled_polygon)
 		    plot3d_zerrorfill(this_plot);
 		term_apply_lp_properties(&(this_plot->lp_properties));
@@ -1362,7 +1362,6 @@ do_3dplot(
 		term_apply_lp_properties(&this_plot->lp_properties);
 
 		switch (this_plot->plot_style) {
-		case FILLEDCURVES:
 		case IMPULSES:
 		    if (!(hidden3d && draw_this_surface))
 			key_sample_line(xl, yl);
@@ -1441,6 +1440,7 @@ do_3dplot(
 		    break;
 
 		case ZERRORFILL:
+		case FILLEDCURVES:
 		    /* zerrorfill colors are weird (as in "backwards") */
 		    apply_pm3dcolor(&this_plot->lp_properties.pm3d_color);
 		    key_sample_fill(xl, yl, this_plot);
@@ -2137,9 +2137,7 @@ plot3d_points(struct surface_points *plot)
 	const char *ptchar;
 
 	/* Apply constant color outside of the loop */
-	if (plot->plot_style == CIRCLES)
-	    set_rgbcolor_const( plot->fill_properties.border_color.lt );
-	else if (colortype == TC_RGB)
+	if (colortype == TC_RGB)
 	    set_rgbcolor_const( plot->lp_properties.pm3d_color.lt );
 
 	for (i = 0; i < icrvs->p_count; i++) {
@@ -2178,8 +2176,10 @@ plot3d_points(struct surface_points *plot)
 			do_arc(x, y, radius, 0., 360.,
 				style_from_fill(fillstyle), FALSE);
 			/* Retrace the border if the style requests it */
-			if (need_fill_border(fillstyle))
+			if (need_fill_border(fillstyle)) {
 			    do_arc(x, y, radius, 0., 360., 0, FALSE);
+			    set_rgbcolor_const(plot->lp_properties.pm3d_color.lt);
+			}
 			continue;
 		    }
 
@@ -4229,14 +4229,15 @@ plot3d_polygons(struct surface_points *plot)
 	if (nv < 3)
 	    continue;
 
-	/* Coloring piggybacks on options for isosurface */
+	/* Coloring taken from fillstyle (which confusingly is in plot->lp_properties) */
 	if (plot->pm3d_color_from_column && !isnan(points[0].CRD_COLOR))
 	    quad[0].c = points[0].CRD_COLOR;
-	else if (plot->fill_properties.border_color.type == TC_DEFAULT) {
+	else if (plot->lp_properties.pm3d_color.type == TC_Z
+	     ||  plot->lp_properties.pm3d_color.type == TC_DEFAULT) {
 	    double z = pm3d_assign_triangle_z(points[0].z, points[1].z, points[2].z);
 	    quad[0].c = rgb_from_gray(cb2gray(z));
 	} else
-	    quad[0].c = plot->fill_properties.border_color.lt;
+	    quad[0].c = plot->lp_properties.pm3d_color.lt;
 	quad[1].c = style;
 	pm3d_add_polygon( plot, quad, nv );
     }

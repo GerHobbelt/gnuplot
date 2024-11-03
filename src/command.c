@@ -2233,7 +2233,10 @@ print_command()
 		line = block->udv_value.v.functionblock.data_array;
 	    } else
 #endif	/* USE_FUNCTIONBLOCKS */
+	    if (block->udv_value.type == DATABLOCK)
 		line = block->udv_value.v.data_array;
+	    else
+		int_error(c_token, "%s is not printable", datablock_name);
 
 	    /* Printing a datablock into itself would cause infinite recursion */
 	    if (print_out_var && !strcmp(datablock_name, print_out_name))
@@ -2508,6 +2511,7 @@ save_command()
     FILE *fp;
     char *save_file = NULL;
     TBOOLEAN append = FALSE;
+    TBOOLEAN ispipe = FALSE;
     int what;
 
     c_token++;
@@ -2520,6 +2524,7 @@ save_command()
 	case SAVE_VARS:
 	case SAVE_FIT:
 	case SAVE_DATABLOCKS:
+	case SAVE_CHANGES:
 	case SAVE_MARKS:
 	    c_token++;
 	    break;
@@ -2538,6 +2543,7 @@ save_command()
     if (save_file[0]=='|') {
 	restrict_popen();
 	fp = popen(save_file+1,"w");
+	ispipe = TRUE;
     } else
 #endif
     {
@@ -2572,6 +2578,9 @@ save_command()
 	break;
     case SAVE_DATABLOCKS:
 	    save_datablocks(fp);
+	break;
+    case SAVE_CHANGES:
+	    save_changes(fp, ispipe);
 	break;
     case SAVE_MARKS:
 	    save_marks(fp);

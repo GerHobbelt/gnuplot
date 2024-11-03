@@ -1546,6 +1546,17 @@ save_fillstyle(FILE *fp, const struct fill_style_type *fs)
 }
 
 void
+save_packed_fillstyle(FILE *fp, int packed_fillstyle)
+{
+    struct fill_style_type fs;
+    fs.fillstyle = packed_fillstyle & 0xf;
+    fs.filldensity =  packed_fillstyle >> 4;
+    fs.fillpattern =  packed_fillstyle >> 4;
+    fprintf(fp,"fillstyle ");
+    save_fillstyle(fp, &fs);
+}
+
+void
 save_textcolor(FILE *fp, const struct t_colorspec *tc)
 {
     if (tc->type) {
@@ -1847,6 +1858,16 @@ save_object(FILE *fp, int tag)
 		fprintf(fp, (fp==stderr) ? "\n\t\t\t    to " : " to ");
 		save_position(fp, &this_polygon->vertex[nv], 3, FALSE);
 	    }
+	}
+
+	else if ((this_object->object_type == OBJ_MARK)
+	    && (tag == 0 || tag == this_object->tag)) {
+	    t_mark *this_mark = &this_object->o.mark;
+	    showed = TRUE;
+	    fprintf(fp, "%sobject %2d mark marktype %d ",
+		(fp==stderr) ? "\t" : "set ", this_object->tag, this_mark->type);
+	    fprintf(fp, "center ");
+	    save_position(fp, &this_mark->center, 3, FALSE);
 	}
 
 	/* Properties common to all objects */

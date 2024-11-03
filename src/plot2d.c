@@ -141,6 +141,7 @@ cp_alloc(int num)
     default_arrow_style(&(cp->arrow_properties));
     cp->fill_properties = default_fillstyle;
     cp->filledcurves_options = filledcurves_opts_data;
+    cp->marks_options = (struct marks_options) DEFAULT_MARKS_OPTS;
 
     return (cp);
 }
@@ -617,6 +618,19 @@ get_data(struct curve_points *current_plot)
 	max_cols = 5;
 	break;
 
+    case MARKS:	/* 2 + possible variable color, or 4 + possible variable color */
+    case LINESMARKS:
+        /* 2 column: x y */
+        /* 3 column: x y scale */
+        /* 4 column: x y xscale yscale */
+        /* 5 column: x y xscale yscale angle */
+	/* Allow 1 extra column because of 'pointsize variable'    */
+	/* Allow 1 extra column because of 'marktype variable' */
+	/* Allow 1 extra column because of 'lc rgb variable'    */
+	min_cols = 2;
+	max_cols = 8;
+	break;
+
     case PARALLELPLOT:
     case SPIDERPLOT:
 	/* 1 column: y coordinate only */
@@ -855,6 +869,10 @@ get_data(struct curve_points *current_plot)
 	    case BOXPLOT:
 			    /* Only the key sample uses this value */
 			    v[j++] = current_plot->base_linetype + 1;
+			    break;
+	    case MARKS:
+	    case LINESMARKS:
+			    if (j < 3) int_error(NO_CARET,errmsg);
 			    break;
 	    default:
 		break;
@@ -1412,6 +1430,33 @@ get_data(struct curve_points *current_plot)
 	    break;
 	}
 
+	case MARKS:
+	case LINESMARKS:
+	{   /*  x y
+		x y scale
+		x y xscale yscale 
+                x y xscale yscale angle
+	     */
+    	    int var = j; /* column number */
+	    coordval x      = v[0]; /* x */
+	    coordval y      = v[1]; /* y */
+	    coordval xlow   = 1;    /* CRD_PTSIZE */
+	    coordval xhigh;         /* xscale */
+	    coordval ylow;          /* yscale */
+            coordval yhigh;         /* angle */
+            coordval tag    = -1;   /* tag */
+	    if (current_plot->lp_properties.p_size == PTSZ_VARIABLE)
+                xlow = v[--var];
+	    if (current_plot->marks_options.variable) /* mt variable */
+		tag = v[--var];
+            xhigh = (var >= 3) ? v[2] : 1.0;
+	    ylow  = (var >= 4) ? v[3] : xhigh;
+	    yhigh = (var >= 5) ? v[4] : 0.0;
+	    store2d_point(current_plot, i++, x, y,
+			  xlow, xhigh, ylow, yhigh, tag);
+	    break;
+	}
+
 	/* These exist for 3D (splot) but not for 2D (plot) */
 	case PM3DSURFACE:
 	case CONTOURFILL:
@@ -1506,7 +1551,9 @@ store2d_point(
 
 	/* Some plot styles use xhigh and yhigh for other quantities, */
 	/* which polar mode transforms would break		      */
-	if (current_plot->plot_style == CIRCLES) {
+	if (current_plot->plot_style == MARKS || current_plot->plot_style == LINESMARKS) 
+           ;
+	else if (current_plot->plot_style == CIRCLES) {
 	    double radius = (xhigh - xlow)/2.0;
 	    xlow = x - radius;
 	    xhigh = x + radius;
@@ -1590,6 +1637,13 @@ store2d_point(
 	    cp->type = UNDEFINED;
 	break;
     case SECTORS:
+        cp->xlow  = xlow;
+        cp->xhigh = xhigh;
+        cp->ylow  = ylow;
+        cp->yhigh = yhigh;
+	break;
+    case MARKS: 
+    case LINESMARKS: 
         cp->xlow  = xlow;
         cp->xhigh = xhigh;
         cp->ylow  = ylow;
@@ -2408,6 +2462,7 @@ eval_plots()
 		this_plot->plot_smooth = SMOOTH_NONE;
 		this_plot->plot_filter = FILTER_NONE;
 		this_plot->filledcurves_options = filledcurves_opts_data;
+		this_plot->marks_options = (struct marks_options) DEFAULT_MARKS_OPTS;
 
 		/* Only relevant to "with table" */
 		free_at(table_filter_at);
@@ -2811,6 +2866,43 @@ eval_plots()
 		    }
 		}
 
+		/* pick up the special 'tag' keyword the 'marks' style requires */
+		if (this_plot->plot_style == MARKS 
+		||  this_plot->plot_style == LINESMARKS) {
+		    if (almost_equals(c_token,"mark$type") || equals(c_token, "mt")) {
+			c_token++;
+                        if (almost_equals(c_token, "var$iable")) {
+                           this_plot->marks_options.variable = TRUE;
+                           c_token++;                                
+                        } else 
+  			   this_plot->marks_options.tag = int_expression();
+    		        continue;
+		    }
+		    
+		    if (almost_equals(c_token,"unit$s")) {
+			c_token++;
+		        if (equals(c_token,"xy")) {
+		            this_plot->marks_options.units = MARK_UNITS_XY;
+		        } else if (equals(c_token,"xx")) {
+		            this_plot->marks_options.units = MARK_UNITS_XX;
+		        } else if (equals(c_token,"yy")) {
+		            this_plot->marks_options.units = MARK_UNITS_YY;
+		        } else if (equals(c_token,"gxy")) {
+		            this_plot->marks_options.units = MARK_UNITS_GXY;
+		        } else if (equals(c_token,"gxx")) {
+		            this_plot->marks_options.units = MARK_UNITS_GXX;
+		        } else if (equals(c_token,"gyy")) {
+		            this_plot->marks_options.units = MARK_UNITS_GYY;
+		        } else if (equals(c_token,"ps")) {
+		            this_plot->marks_options.units = MARK_UNITS_PS;
+		        } else {
+		            int_error(c_token, "expecting 'xy', 'xx', 'yy', 'gxy', 'gxx', 'gyy', or 'ps'" );
+		        }
+		        c_token++;
+			continue;
+		    }
+	        }
+
 		/* pick up the special 'units' keyword the 'ellipses' style allows */
 		if (this_plot->plot_style == ELLIPSES || this_plot->plot_style == SECTORS) {
 		    int stored_token = c_token;
@@ -3073,6 +3165,8 @@ eval_plots()
 		case LABELPOINTS:
 		case CIRCLES:
 		case SECTORS:
+		case MARKS:
+		case LINESMARKS:
 		case YERRORBARS:
 		case YERRORLINES:
 		case SURFACEGRID:

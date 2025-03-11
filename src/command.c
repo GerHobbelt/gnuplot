@@ -429,10 +429,6 @@ com_line()
     screen_ok = interactive;
     return_value = do_line();
 
-    /* If this line is part of a multiplot, save it for later replay */
-    if (multiplot && !multiplot_playback)
-	append_multiplot_line(gp_input_line);
-
     return return_value;
 }
 
@@ -491,7 +487,8 @@ do_line()
 	     */
 	    int_error(NO_CARET, "Syntax error: missing block terminator }");
 	}
-	else if (interactive || noinputfiles) {
+
+	if (interactive || noinputfiles || reading_from_dash) {
 	    /* If we are really in interactive mode and there are unterminated blocks,
 	     * then we want to display a "more>" prompt to get the rest of the block.
 	     * However, there are two more cases that must be dealt here:
@@ -499,7 +496,8 @@ do_line()
 	     * the other is when commands are piped to gnuplot which is opened
 	     * as a slave process. The test for noinputfiles is for the latter case.
 	     * If we didn't have that test here, unterminated blocks sent via a pipe
-	     * would trigger the error message in the else branch below. */
+	     * would trigger the error message in the else branch below.
+	     */
 	    int retval;
 	    strcat(gp_input_line,";");
 	    retval = read_line("more> ", strlen(gp_input_line));
@@ -511,12 +509,13 @@ do_line()
 	    num_tokens = scanner(&gp_input_line, &gp_input_line_len);
 	    if (gp_input_line[token[num_tokens].start_index] == '#')
 		gp_input_line[token[num_tokens].start_index] = NUL;
-	}
-	else {
+
+	} else {
 	    /* Non-interactive mode here means that we got a string from -e.
 	     * Having curly_brace_count > 0 means that there are at least one
 	     * unterminated blocks in the string.
-	     * Likely user error, so we die with an error message. */
+	     * Likely user error, so we die with an error message.
+	     */
 	    int_error(NO_CARET, "Syntax error: missing block terminator }");
 	}
     }
@@ -760,9 +759,28 @@ undefine_command()
 static void
 command()
 {
-    int i;
+    /* Support for multiplot record/replay.
+     * Isolate the next command in the input line.
+     * Remember the command as given, then save it to $GPVAL_LAST_MULTIPLOT
+     * only after it is successfully executed.
+     * However we discard commands read inside a "load" or "call" invocation.
+     */
+    static char *one_command = NULL;
+    char *command_start = &gp_input_line[token[c_token].start_index];
+    if (!lf_head || !lf_head->inside_multiplot) {
+	/* step through tokens to find a real (not quoted) semicolon */
+	size_t len = strlen(command_start);
+	for (int semicolon = c_token; semicolon <= num_tokens; semicolon++) {
+	    if (equals(semicolon,";")) {
+		len = &gp_input_line[token[semicolon].start_index] - command_start;
+		break;
+	    }
+	}
+	free(one_command);
+	one_command = strndup(command_start, len);
+    }
 
-    for (i = 0; i < MAX_NUM_VAR; i++)
+    for (int i = 0; i < MAX_NUM_VAR; i++)
 	c_dummy_var[i][0] = NUL;	/* no dummy variables */
 
     if (is_definition(c_token))
@@ -770,7 +788,14 @@ command()
     else if (is_array_assignment())
 	;
     else
+	/* Execute the command that begins the line */
 	(*lookup_ftable(&command_ftbl[0],c_token))();
+
+    /* If this is part of a multiplot, save it for later replay */
+    if (multiplot && !multiplot_playback) {
+	if (!lf_head || !lf_head->inside_multiplot)
+	    append_multiplot_line(one_command);
+    }
 
     return;
 }
@@ -2074,6 +2099,10 @@ plot_command()
     add_udv_by_name("MOUSE_SHIFT")->udv_value.type = NOTDEFINED;
     add_udv_by_name("MOUSE_ALT")->udv_value.type = NOTDEFINED;
     add_udv_by_name("MOUSE_CTRL")->udv_value.type = NOTDEFINED;
+    if (multiplot_playback) {
+	/* This will only get applied to a multiplot panel with active mousing */
+	apply_saved_zoom();
+    }
 #endif
     if (evaluate_inside_functionblock && inside_plot_command)
 	int_error(NO_CARET, "plot command not available in this context");

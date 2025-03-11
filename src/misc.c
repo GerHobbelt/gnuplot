@@ -389,7 +389,7 @@ load_file(FILE *fp, char *name, int calltype)
 
 	/* process line */
 	if (strlen(gp_input_line) > 0) {
-	    screen_ok = FALSE;	/* make sure command line is echoed on error */
+	    screen_ok = FALSE;  /* make sure command line is echoed on error */
 	    if (do_line())
 		stop = TRUE;
 	}
@@ -536,7 +536,6 @@ lf_push(FILE *fp, char *name, char *cmdline)
     lf->cmdline = cmdline;
 
     lf->interactive = interactive;	/* save current state */
-    lf->inside_multiplot = multiplot;	/* save current state */
     lf->inline_num = inline_num;	/* save current line number */
     lf->call_argc = call_argc;
 

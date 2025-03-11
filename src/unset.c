@@ -44,6 +44,7 @@
 #include "hidden3d.h"
 #include "jitter.h"
 #include "loadpath.h"
+#include "marks.h"
 #include "misc.h"
 #include "multiplot.h"
 #include "parse.h"
@@ -112,9 +113,6 @@ static void reset_logscale(struct axis *);
 static void unset_logscale(void);
 static void unset_mapping(void);
 static void unset_margin(t_position *);
-static void delete_mark(struct mark_data *prev, struct mark_data *this);
-static void clear_mark(void);
-static void unset_mark(void);
 static void unset_missing(void);
 static void unset_micro(void);
 static void unset_minus_sign(void);
@@ -437,6 +435,7 @@ unset_command()
 	    unset_wall(i);
 	break;
     case S_MARK:
+    case S_MARKS:
 	unset_mark();
 	break;
     case S_WARNINGS:
@@ -1437,50 +1436,6 @@ unset_margin(t_position *margin)
     margin->x = -1;
 }
 
-/* process 'unset mark' command */
-
-static void
-delete_mark(struct mark_data *prev, struct mark_data *this)
-{
-    if (this != NULL) {		/* there really is something to delete */
-	if (prev != NULL)	/* there is a previous rectangle */
-	    prev->next = this->next;
-	else			/* this = first_object so change first_object */
-	    first_mark = this->next;
-	/* NOTE:  Must free contents as well */
-	free_mark(this);
-    }
-}
-
-static void
-clear_mark()
-{
-    /* delete all marks */
-    while (first_mark != NULL)
-	delete_mark((struct mark_data *) NULL, first_mark);
-}
-
-static void
-unset_mark()
-{
-    int tag;
-    struct mark_data *this, *prev;
-
-    if (END_OF_COMMAND) {
-	clear_mark();
-	return;
-    }
-
-    tag = int_expression();
-    for (this = first_mark, prev = NULL; this != NULL;
-	 prev = this, this = this->next) {
-	if (this->tag == tag) {
-	    delete_mark(prev, this);
-	    break;
-	}
-    }
-}
-
 /* process 'unset micro' command */
 static void
 unset_micro()
@@ -1603,7 +1558,7 @@ unset_origin()
 static void
 unset_output()
 {
-    if (multiplot) {
+    if (in_multiplot) {
 	int_error(c_token, "you can't change the output in multiplot mode");
 	return;
     }
@@ -1908,7 +1863,7 @@ unset_terminal()
 {
     struct udvt_entry *original_terminal = get_udv_by_name("GNUTERM");
 
-    if (multiplot)
+    if (in_multiplot)
 	term_end_multiplot();
 
     term_reset();
@@ -2317,7 +2272,7 @@ reset_command()
 #endif
 
     /* restore previous multiplot offset and margins */
-    if (multiplot)
+    if (in_multiplot)
 	multiplot_reset();
 
     /* reset everything to do with "set datafile" */

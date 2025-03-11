@@ -69,9 +69,9 @@
  *	x = <value>
  *	y = <value>
  *	z = <value>
- *	F(x,y) = <value>
+ *	func() = <value>
  *	mouse
- * z and F(x,y) are roughly equivalent in functionality, but providing
+ * z and func(x,y) are roughly equivalent in functionality, but providing
  * the function in principle allows reevaluation during interpolation
  * so that the reported target point is more accurate (not yet implemented).
  *
@@ -124,8 +124,10 @@
 #include "eval.h"
 #include "gp_time.h"
 #include "graphics.h"
+#include "graph3d.h"
 #include "mouse.h"
 #include "plot2d.h"
+#include "plot3d.h"
 #include "watch.h"
 #include "setshow.h"	/* for parse_label_options */
 #include "save.h"	/* for save_label_style */
@@ -144,9 +146,10 @@ struct text_label watchpoint_labelstyle;
  * Local prototypes
  */
 
-static struct text_label *mouse_hit_label(struct curve_points *plot,
+static struct text_label *mouse_hit_label(
 			watch_t *target, double x, double y, double z);
 static char *apply_tic_format( struct axis *axis, double hit );
+static void show_watchlist( struct curve_points *this_plot, struct watch_t *watchlist );
 
 /*
  * Default label style is the one used for "watch mouse".
@@ -252,15 +255,31 @@ watch_line(struct curve_points *plot, double x1, double y1, double z1, double x2
 		hit_z = watch->target;
 		break;
 	case SAMPLE_AXIS:
-		/* the test is actually for f(x,y)*/
-		Gcomplex(&watch->func->dummy_values[0], x1, 0.0);
-		Gcomplex(&watch->func->dummy_values[1], y1, 0.0);
-		evaluate_at(watch->func->at, &f);
+		{
+		/* FIXME could share save/restore xyz code with mouse_label_hit() */
+		struct udvt_entry *x_udv = add_udv_by_name("x");
+		struct udvt_entry *y_udv = add_udv_by_name("y");
+		struct udvt_entry *z_udv = add_udv_by_name("z");
+		t_value original_x = x_udv->udv_value;
+		t_value original_y = y_udv->udv_value;
+		t_value original_z = z_udv->udv_value;
+
+		Gcomplex(&x_udv->udv_value, x1, 0);
+		Gcomplex(&y_udv->udv_value, y1, 0);
+		Gcomplex(&z_udv->udv_value, z1, 0);
+		evaluate_at(watch->function_at, &f);
 		f1 = real(&f);
-		Gcomplex(&watch->func->dummy_values[0], x2, 0.0);
-		Gcomplex(&watch->func->dummy_values[1], y2, 0.0);
-		evaluate_at(watch->func->at, &f);
+
+		Gcomplex(&x_udv->udv_value, x2, 0);
+		Gcomplex(&y_udv->udv_value, y2, 0);
+		Gcomplex(&z_udv->udv_value, z2, 0);
+		evaluate_at(watch->function_at, &f);
 		f2 = real(&f);
+
+		x_udv->udv_value = original_x;
+		y_udv->udv_value = original_y;
+		z_udv->udv_value = original_z;
+
 		/* outrange line segment does not trigger a watch event */
 		if (!inrange(watch->target, f1, f2))
 		    continue;
@@ -271,6 +290,7 @@ watch_line(struct curve_points *plot, double x1, double y1, double z1, double x2
 		hit_y = y1 + (y2 - y1) * (watch->target - f1)/(f2 - f1);
 		hit_z = z1 + (z2 - z1) * (watch->target - f1)/(f2 - f1);
 		break;
+		}
 	default:
 		continue;
 		break;
@@ -291,7 +311,7 @@ watch_line(struct curve_points *plot, double x1, double y1, double z1, double x2
 	 */
 	if (watch->type == MOUSE_PROXY_AXIS) {
 	    struct text_label *label;
-	    label = mouse_hit_label(plot, watch, hit_x, hit_y, hit_z);
+	    label = mouse_hit_label(watch, hit_x, hit_y, hit_z);
 	    label->next = plot->labels;
 	    plot->labels = label;
 	    continue;
@@ -300,7 +320,7 @@ watch_line(struct curve_points *plot, double x1, double y1, double z1, double x2
 	/* For all other watch target types we update the list of hits */
 	sprintf(array_name, "WATCH_%d", watch->watchno);
 	array = get_udv_by_name(array_name);
-	if (array->udv_value.type != ARRAY)
+	if (!array || array->udv_value.type != ARRAY)
 	    int_error(NO_CARET, "%s is not an array", array_name);
 
 	/* If a hit falls exactly on a line segment endpoint it can trigger on
@@ -318,7 +338,7 @@ watch_line(struct curve_points *plot, double x1, double y1, double z1, double x2
 	 */
 	if (TRUE) {
 	    struct text_label *label;
-	    label = mouse_hit_label(plot, watch, hit_x, hit_y, hit_z);
+	    label = mouse_hit_label(watch, hit_x, hit_y, hit_z);
 	    label->next = plot->labels;
 	    plot->labels = label;
 	    label->hidden = watchpoint_labelstyle.hidden;
@@ -386,19 +406,17 @@ parse_watch(struct curve_points *plot)
 	    return;
 	new_watch->type = MOUSE_PROXY_AXIS;
 	watch_mouse_active = TRUE;
-    } else if ((new_watch->func = get_udf_by_token(c_token))) {
-	if (!new_watch->func->at)
-	    int_error(c_token, "undefined function: %s", new_watch->func->udf_name);
-	if (new_watch->func->dummy_num != 2)
-	    int_error(c_token, "%s is not a 2-parameter function", new_watch->func->udf_name);
-	c_token += 6;
+    } else if ((get_udf_by_token(c_token) != NULL)
+	   ||  (( equals(c_token,"$") && equals(c_token+2, "("))) ) {
+	/* Function or functionblock */
+	new_watch->function_at = perm_at();
 	if (equals(c_token++, "="))
 	    new_watch->target = real_expression();
 	else
-	    int_error(c_token, "expecting f(x,y)=<value>");
+	    int_error(c_token, "expecting f()=<value>");
 	new_watch->type = SAMPLE_AXIS;
     } else
-	int_error(NO_CARET, "unrecognized watch request");
+	int_error(NO_CARET, "undefined function or unrecognized watch request");
 
     /* label can be generated at the time of a hit by a string-valued function */
     if (equals(c_token, "label")) {
@@ -438,6 +456,8 @@ free_watchlist(struct watch_t *watchlist)
     while (watchlist) {
 	temp = watchlist;
 	watchlist = watchlist->next;
+	if (temp->function_at)
+	    free_at(temp->function_at);
 	if (temp->label_at)
 	    free_at(temp->label_at);
 	free(temp);
@@ -488,8 +508,7 @@ init_watch(struct curve_points *plot)
  * in plot->labels and print them all afterwards.
  */
 static struct text_label *
-mouse_hit_label(struct curve_points *plot, watch_t *target,
-		double x, double y, double z)
+mouse_hit_label(watch_t *target, double x, double y, double z)
 {
     char *xlabel, *ylabel;
     static char buffer[256];
@@ -647,59 +666,79 @@ show_style_watchpoint()
 void
 show_watchpoints()
 {
-    struct curve_points *this_plot = NULL;
+    if (is_3d_plot) {
+	for (struct surface_points *this_plot = first_3dplot;
+		    this_plot; this_plot = this_plot->next_sp) {
+	    if (!this_plot->watchlist)
+		continue;
+	    fprintf(stderr, "Plot title:\t%s\n", this_plot->title ? this_plot->title : "(none)");
+	    show_watchlist((struct curve_points *)this_plot, this_plot->watchlist);
+	}
+    return;
+    }
+
+    for (struct curve_points *this_plot = first_plot;
+		this_plot; this_plot = this_plot->next) {
+	if (!this_plot->watchlist)
+	    continue;
+	fprintf(stderr, "Plot title:\t%s\n", this_plot->title ? this_plot->title : "(none)");
+	show_watchlist(this_plot, this_plot->watchlist);
+    }
+}
+
+
+static void
+show_watchlist( struct curve_points *this_plot, struct watch_t *watchlist )
+{
+    struct watch_t *this_watch;
     struct udvt_entry *array;
     char array_name[12];
     int hits;
 
-    for (this_plot = first_plot; this_plot; this_plot = this_plot->next) {
-	struct watch_t *this_watch;
+    /* Loop over watchpoints attached to this plot */
+    for (this_watch = watchlist; this_watch; this_watch = this_watch->next) {
+	const char *type;
+	int i;
 
-	if (!this_plot->watchlist)
+	if (this_watch->type == MOUSE_PROXY_AXIS) {
+	    fprintf(stderr, "\tWatch %d target mouse\n", this_watch->watchno);
 	    continue;
+	}
+	type =  this_watch->type == FIRST_X_AXIS ? "x" :
+		this_watch->type == FIRST_Y_AXIS ? "y" :
+		this_watch->type == FIRST_Z_AXIS ? "z" :
+		this_watch->type == SAMPLE_AXIS ? "func()" : NULL;
+	if (!type)
+	    continue;
+	fprintf(stderr, "\tWatch %d target ", this_watch->watchno);
+	fprintf(stderr, "%s = %.4g ", type, this_watch->target);
+	fprintf(stderr, "\t(%d hits)\n", this_watch->hits);
 
-	/* Found a plot with watchpoints */
-	fprintf(stderr, "Plot title:\t%s\n", this_plot->title ? this_plot->title : "(none)");
+	/* Loop over hits stored in the corresponding array */
+	sprintf(array_name, "WATCH_%d", this_watch->watchno);
+	array = get_udv_by_name(array_name);
+	if (!array || array->udv_value.type != ARRAY)
+	    int_error(NO_CARET, "error: cannot find array %s", array_name);
+	hits = array->udv_value.v.value_array[0].v.int_val;
+	if (hits != this_watch->hits)
+	    int_error(NO_CARET, "error: wrong number of hits in %s", array_name);
 
-	/* Loop over watchpoints attached to this plot */
-	for (this_watch = this_plot->watchlist; this_watch; this_watch = this_watch->next) {
-	    const char *type;
-	    int i;
-
-	    if (this_watch->type == MOUSE_PROXY_AXIS) {
-		fprintf(stderr, "\tWatch %d target mouse\n", this_watch->watchno);
-		continue;
+	for (i = 1; i <= hits; i++) {
+	    double x = array->udv_value.v.value_array[i].v.cmplx_val.real;
+	    double y = array->udv_value.v.value_array[i].v.cmplx_val.imag;
+	    char *xlabel, *ylabel;
+	    if (this_plot->plot_type == FUNC || this_plot->plot_type == DATA) {
+		/* 2D plots might watch any of x1 x2 y1 y2 */
+		xlabel = strdup( apply_tic_format( &axis_array[this_plot->x_axis], x));
+		ylabel = strdup( apply_tic_format( &axis_array[this_plot->y_axis], y));
+	    } else {
+		/* 3D plots do not have a x2 or y2 axis */
+		xlabel = strdup( apply_tic_format( &axis_array[FIRST_X_AXIS], x));
+		ylabel = strdup( apply_tic_format( &axis_array[FIRST_Y_AXIS], y));
 	    }
-	    type =  this_watch->type == FIRST_X_AXIS ? "x" :
-		    this_watch->type == FIRST_Y_AXIS ? "y" :
-		    this_watch->type == FIRST_Z_AXIS ? "z" :
-		    this_watch->type == SAMPLE_AXIS ? "F(x,y)" : NULL;
-	    if (!type)
-		continue;
-	    fprintf(stderr, "\tWatch %d target ", this_watch->watchno);
-	    fprintf(stderr, "%s = %.4g ", type, this_watch->target);
-	    fprintf(stderr, "\t(%d hits)\n", this_watch->hits);
-
-	    /* Loop over hits stored in the corresponding array */
-	    sprintf(array_name, "WATCH_%d", this_watch->watchno);
-	    array = get_udv_by_name(array_name);
-	    if (!array || array->udv_value.type != ARRAY)
-		int_error(NO_CARET, "error: cannot find array %s", array_name);
-	    hits = array->udv_value.v.value_array[0].v.int_val;
-	    if (hits != this_watch->hits)
-		int_error(NO_CARET, "error: wrong number of hits in %s", array_name);
-
-	    for (i = 1; i <= hits; i++) {
-		double x = array->udv_value.v.value_array[i].v.cmplx_val.real;
-		double y = array->udv_value.v.value_array[i].v.cmplx_val.imag;
-		char *xlabel = strdup( apply_tic_format( &axis_array[this_plot->x_axis], x));
-		char *ylabel = strdup( apply_tic_format( &axis_array[this_plot->y_axis], y));
-
-		fprintf(stderr, "\t\thit %d\tx %s  y %s\n", i, xlabel, ylabel);
-
-		free(xlabel);
-		free(ylabel);
-	    }
+	    fprintf(stderr, "\t\thit %d\tx %s  y %s\n", i, xlabel, ylabel);
+	    free(xlabel);
+	    free(ylabel);
 	}
     }
 }

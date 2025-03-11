@@ -1222,12 +1222,10 @@ clear_command()
 
     term_start_plot();
 
-    if (in_multiplot && term->fillbox) {
-	int xx1 = xoffset * term->xmax;
-	int yy1 = yoffset * term->ymax;
-	unsigned int width = xsize * term->xmax;
-	unsigned int height = ysize * term->ymax;
-	(*term->fillbox)(FS_EMPTY, xx1, yy1, width, height);
+    if (in_multiplot) {
+	(*term->fillbox)(FS_EMPTY, panel_bounds.xleft, panel_bounds.ybot,
+		    panel_bounds.xright - panel_bounds.xleft,
+		    panel_bounds.ytop - panel_bounds.ybot);
     }
     term_end_plot();
 
@@ -2549,9 +2547,16 @@ replot_command()
     if (term->flags & TERM_INIT_ON_REPLOT)
 	term->init();
 
-    if (last_plot_was_multiplot && !in_multiplot)
-	replay_multiplot();
-    else
+    if (last_plot_was_multiplot && !in_multiplot) {
+	struct udvt_entry *datablock = get_udv_by_name("$GPVAL_LAST_MULTIPLOT");
+	if (!datablock || datablock->udv_value.type != DATABLOCK
+	||  datablock->udv_value.v.data_array == NULL) {
+	    last_plot_was_multiplot = FALSE;
+	    replotrequest();
+	} else {
+	    replay_multiplot();
+	}
+    } else
 	replotrequest();
 
     SET_CURSOR_ARROW;

@@ -1227,7 +1227,7 @@ clear_command()
 	int yy1 = yoffset * term->ymax;
 	unsigned int width = xsize * term->xmax;
 	unsigned int height = ysize * term->ymax;
-	(*term->fillbox) (0, xx1, yy1, width, height);
+	(*term->fillbox)(FS_EMPTY, xx1, yy1, width, height);
     }
     term_end_plot();
 
@@ -2945,7 +2945,10 @@ toggle_command()
 	}
 	free(plottitle);
 	if (!foundit) {
-	    int_warn(NO_CARET,"Did not find a plot with that title");
+	    if (last_plot_was_multiplot)
+		int_warn(NO_CARET,"Multiplot components can be toggled by number but not by name");
+	    else
+		int_warn(NO_CARET,"Did not find a plot with that title");
 	    return;
 	}
 

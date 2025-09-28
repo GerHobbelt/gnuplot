@@ -43,6 +43,7 @@
 #include "contour.h"
 #include "datablock.h"
 #include "datafile.h"
+#include "encoding.h"
 #include "eval.h"
 #include "filters.h"
 #include "fit.h"
@@ -164,6 +165,7 @@ static void show_fontpath(void);
 static void show_zero(void);
 static void show_datafile(void);
 static void show_table(void);
+static void show_imaginary_i(void);
 static void show_micro(void);
 static void show_minus_sign(void);
 static void show_mouse(void);
@@ -347,6 +349,9 @@ show_command()
 	break;
     case S_KEY:
 	show_key();
+	break;
+    case S_I_SYMBOL:
+	show_imaginary_i();
 	break;
     case S_LOGSCALE:
 	show_logscale();
@@ -987,7 +992,9 @@ show_version(FILE *fp)
 #endif
 
 	    const char *have_cexint =
-#ifdef HAVE_CEXINT
+#if defined(HAVE_ZEXINT)
+		"+ZEXINT  ";
+#elif defined(HAVE_CEXINT)
 		"+CEXINT  ";
 #else
 		"";
@@ -2633,6 +2640,14 @@ show_decimalsign()
     fprintf(stderr, "\tdegree sign for output is %s \n", degree_sign);
 }
 
+static void
+show_imaginary_i()
+{
+    SHOW_ALL_NL;
+    fprintf(stderr, "\timaginary component of gprintf format %%Ci indicated by %s\n",
+	imaginary_user ? imaginary_user : "i or for latex terminals \\imath");
+}
+
 /* process 'show micro' command */
 static void
 show_micro()
@@ -2640,6 +2655,7 @@ show_micro()
     SHOW_ALL_NL;
 
     fprintf(stderr, "\tmicro character for output is %s \n",
+	(use_micro && micro_user) ? micro_user :
     	(use_micro && micro) ? micro : "u");
 }
 

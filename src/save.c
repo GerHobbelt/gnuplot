@@ -627,8 +627,15 @@ set encoding %s\n\
     if (!numeric_locale && !decimalsign)
 	fprintf(fp, "unset decimalsign\n");
 
-    fprintf(fp, "%sset micro\n", use_micro ? "" : "un");
     fprintf(fp, "%sset minussign\n", use_minus_sign ? "" : "un");
+    if (use_micro && micro_user)
+	fprintf(fp, "set micro \"%s\"\n", micro_user);
+    else
+	fprintf(fp, "%sset micro\n", use_micro ? "" : "un");
+    if (imaginary_user)
+	fprintf(fp, "set imaginary_i \"%s\"\n", imaginary_user);
+    else
+	fprintf(fp, "set imaginary_i\n");
 
     fputs("set view ", fp);
     if (splot_map == TRUE)
@@ -1631,13 +1638,13 @@ save_pm3dcolor(FILE *fp, const struct t_colorspec *tc)
 	case TC_FRAC: fprintf(fp," palette fraction %4.2f", tc->value);
 		      break;
 	case TC_RGB:  {
-		      const char *color = reverse_table_lookup(pm3d_color_names_tbl, tc->lt);
+		      const char *color = reverse_table_lookup(pm3d_color_names_tbl, tc->rgbcolor);
 		      if (tc->value < 0)
 		  	fprintf(fp," rgb variable ");
 		      else if (*color)
 			fprintf(fp," rgb \"%s\" ", color);
 		      else
-			fprintf(fp," rgb \"#%6.6x\" ", tc->lt);
+			fprintf(fp," rgb \"#%6.6x\" ", tc->rgbcolor);
 		      break;
 		      }
 	case TC_VARIABLE:

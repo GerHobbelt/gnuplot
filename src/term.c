@@ -792,6 +792,9 @@ write_multiline(
 	    y += (vert * lines * t->v_char) / 2;
     }
 
+    /* Replace unicode escape sequences with utf8 byte sequence */
+    text = expand_unicode_escapes(text);
+
     for (;;) {                  /* we will explicitly break out */
 
 	if ((text != NULL) && (p = strchr(text, '\n')) != NULL)
@@ -837,6 +840,44 @@ write_multiline(
 
 }
 
+/*
+ * Replace unicode escape sequences \U+xxxx with the corresponding
+ * UTF-8 byte sequences.  Note that a utf8 character encoding is no longer than
+ * four bytes, which is always less than the seven character escape sequence,
+ * so the substitution can be done in place.
+ * If the current encoding is not utf8, do nothing.
+ * NB: Returned string must be consumed before this routine is called again
+ *     (static char *out)
+ */
+char *
+expand_unicode_escapes(char *text)
+{
+    static char *out = NULL;
+    char *p, *rest;
+
+    if (encoding != S_ENC_UTF8)
+	return text;
+    if ((p = strstr(text, "\\U+")) == NULL)
+	return text;
+
+    free(out);
+    p = out = strdup(text);
+
+    while ( (p = strstr(p, "\\U+")) != NULL) {
+	if (!isxdigit(p[3]) || !isxdigit(p[4]) || !isxdigit(p[5]) || !isxdigit(p[6])) {
+	    int_warn(NO_CARET, "misformed unicode escape sequence %7.7s", p);
+	    p += 7;
+	    continue;
+	}
+	rest = (isxdigit(p[7])) ?  &(p[8]) : &(p[7]);
+	truncate_to_one_utf8_char(p);
+	advance_one_utf8_char(p);
+	memcpy(p, rest, strlen(rest)+1);
+    }
+
+    FPRINTF((stderr, "replacing \"%s\" with \"%s\"\n", text, out));
+    return out;
+}
 
 static void
 do_point(unsigned int x, unsigned int y, int number)
@@ -1874,7 +1915,7 @@ test_term()
 	textbox->opaque = TRUE;
 	textbox->noborder = TRUE;
 	textbox->fillcolor.type = TC_RGB;
-	textbox->fillcolor.lt = 0xccccee;
+	textbox->fillcolor.rgbcolor = 0xccccee;
 	/* disable extra space around text */
 	textbox->xmargin = 0;
 	textbox->ymargin = 0;

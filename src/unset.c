@@ -77,7 +77,6 @@ static void unset_fillstyle(void);
 static void unset_clip(void);
 static void unset_cntrparam(void);
 static void unset_cntrlabel(void);
-static void unset_contour(void);
 static void unset_contourfill(void);
 static void unset_dashtype(void);
 static void unset_dgrid3d(void);
@@ -977,14 +976,6 @@ unset_contourfill()
     contourfill.tic_level = 0;
     contourfill.firstlinetype = -1;
 }
-
-/* process 'unset contour' command */
-static void
-unset_contour()
-{
-    draw_contour = CONTOUR_NONE;
-}
-
 
 /* process 'unset dashtype' command */
 static void
@@ -2067,6 +2058,8 @@ reset_command()
     if (equals(c_token, "session")) {
 	clear_mark();
 	clear_udf_list();
+	if (in_multiplot)
+	    multiplot_end();
 	init_constants();
 	init_session();
 	reset_mouse();

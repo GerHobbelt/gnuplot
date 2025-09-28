@@ -218,6 +218,7 @@ static double term_pointsize=1;
 
 static void term_suspend(void);
 static void term_close_output(void);
+static void term_get_termsize(int *xsize, int *ysize);
 
 static void null_linewidth(double);
 static void do_point(unsigned int x, unsigned int y, int number);
@@ -498,10 +499,39 @@ term_initialise()
     }
 }
 
+/*
+ * The kitty terminals (kittycairo and kittygd) would like to default to
+ * using the full width of the terminal.  Use an ioctl to query fd 0
+ * on the assumption that it is STDIN and it is connected to the user's
+ * terminal window.
+ */
+static void
+term_get_termsize(int *xsize, int *ysize)
+{
+#ifdef HAVE_SYS_IOCTL_H
+# include <sys/ioctl.h>
+    struct winsize sz;
+    int ierr = ioctl(0, TIOCGWINSZ, &sz);
+    if (ierr >= 0 && sz.ws_xpixel > 0 && sz.ws_ypixel > 0) {
+	*xsize = sz.ws_xpixel;
+	*ysize = sz.ws_ypixel;
+    } else
+#endif
+    *xsize = *ysize = 0;
+}
+
 
 void
 term_start_plot()
 {
+    if (term_force_init) {
+	/* Used by kitty and webp terminals to support animation
+	 * (successive frames must start with a blank image).
+	 */
+	term->init();
+	term_force_init = FALSE;
+    } else
+
     if (!term_initialised)
 	term_initialise();
 
@@ -878,7 +908,7 @@ expand_unicode_escapes(char *text)
 	    rest++;
 	truncate_to_one_utf8_char(p);
 	advance_one_utf8_char(p);
-	memcpy(p, rest, strlen(rest)+1);
+	memmove(p, rest, strlen(rest)+1);
     }
 
     FPRINTF((stderr, "replacing \"%s\" with \"%s\"\n", text, out));

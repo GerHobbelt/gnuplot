@@ -1394,15 +1394,20 @@ parse_esc(char *instr)
 	    } else if (*s == '\"') {
 		*t++ = '\"';
 		s++;
-	    } else if (*s >= '0' && *s <= '7') {
+	    } else if (*s >= '0' && *s <= '3') {
+		/* Jul 2025 - only accept octal escape sequences of the form \ooo
+		 * (exactly three numeric characters).  This was always documented
+		 * to be the case, but the code accepted 1-4 characters, not three.
+		 */
 		int i, n;
-		char *octal = (*s == '0' ? "%4o%n" : "%3o%n");
-		if (sscanf(s, octal, &i, &n) > 0) {
+		if ((sscanf(s, "%3o%n", &i, &n) > 0) &&  (n == 3)) {
 		    *t++ = i;
 		    s += n;
 		} else {
-		    /* int_error("illegal octal number ", c_token); */
-		    *t++ = '\\';
+		    /* Invalid octal escape sequence.
+		     * FIXME: Keep the backslash or not???
+		     */
+//		    *t++ = '\\';
 		    *t++ = *s++;
 		}
 	    } else if (s[0] == 'U' && s[1] == '+') {
@@ -1410,6 +1415,16 @@ parse_esc(char *instr)
 		 * Keep backslash; translation will be handled elsewhere.
 		 */
 		*t++ = '\\';
+
+		/* A trailing escaped char must not be merged into the codepoint.
+		 * I would prefer to insert a zero width space (U+200B) but that
+		 * would violate the assumption that len(t) < len(s).
+		 * The compromise is ascii control character "unit separator".
+		 */
+		if (isxdigit(s[2]) && isxdigit(s[3]) && isxdigit(s[4]) && isxdigit(s[5])
+		&&  (s[6] == '\\') && isxdigit(s[7])) {
+		    s[6] = '\037';
+		}
 	    }
 	} else if (df_separators && *s == '\"' && *(s+1) == '\"') {
 	    /* For parsing CSV strings with quoted quotes */

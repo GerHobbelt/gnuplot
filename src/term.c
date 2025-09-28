@@ -770,18 +770,20 @@ write_multiline(
     const char *font)           /* NULL or "" means use default */
 {
     struct termentry *t = term;
-    char *p = text;
+    char *expanded_text;
+    char *p;
 
-    if (!p)
+    if (!text)
 	return;
 
-    /* EAM 9-Feb-2003 - Set font before calculating sizes */
+    /* Set font before calculating sizes */
     if (font && *font)
 	(*t->set_font) (font);
 
     if (vert != JUST_TOP) {
 	/* count lines and adjust y */
 	int lines = 0;          /* number of linefeeds - one fewer than lines */
+	p = text;
 	while (*p) {
 	    if (*p++ == '\n')
 		++lines;
@@ -793,7 +795,8 @@ write_multiline(
     }
 
     /* Replace unicode escape sequences with utf8 byte sequence */
-    text = expand_unicode_escapes(text);
+    expanded_text = expand_unicode_escapes(text);
+    p = text = expanded_text;
 
     for (;;) {                  /* we will explicitly break out */
 
@@ -835,6 +838,8 @@ write_multiline(
 	text = p + 1;
     }                           /* unconditional branch back to the for(;;) - just a goto ! */
 
+    free(expanded_text);
+
     if (font && *font)
 	(*t->set_font) ("");
 
@@ -846,22 +851,20 @@ write_multiline(
  * four bytes, which is always less than the seven character escape sequence,
  * so the substitution can be done in place.
  * If the current encoding is not utf8, do nothing.
- * NB: Returned string must be consumed before this routine is called again
- *     (static char *out)
+ * NB: Returned string must be freed by caller
  */
 char *
 expand_unicode_escapes(char *text)
 {
-    static char *out = NULL;
+    char *out = strdup(text);
     char *p, *rest;
 
     if (encoding != S_ENC_UTF8)
-	return text;
+	return out;
     if ((p = strstr(text, "\\U+")) == NULL)
-	return text;
+	return out;
 
-    free(out);
-    p = out = strdup(text);
+    p = out;
 
     while ( (p = strstr(p, "\\U+")) != NULL) {
 	if (!isxdigit(p[3]) || !isxdigit(p[4]) || !isxdigit(p[5]) || !isxdigit(p[6])) {
@@ -870,6 +873,9 @@ expand_unicode_escapes(char *text)
 	    continue;
 	}
 	rest = (isxdigit(p[7])) ?  &(p[8]) : &(p[7]);
+	/* parse_esc may have added a unit separator at the end of the codepoint */
+	if (*rest == '\037')
+	    rest++;
 	truncate_to_one_utf8_char(p);
 	advance_one_utf8_char(p);
 	memcpy(p, rest, strlen(rest)+1);
@@ -2526,6 +2532,12 @@ enhanced_recursion(
 		    p += (codepoint > 0xFFFF) ? 7 : 6;
 		    for (i=0; i<length; i++)
 			(term->enhanced_writec)(utf8char[i]);
+		    /* parse_esc() may have added a unit separator character
+		     * to prevent a trailing digit from being misinterpreted
+		     * as part of the codepoint.
+		     */
+		    if (*p == '\037')
+			p++;
 		    break;
 		}
 
@@ -2542,18 +2554,15 @@ enhanced_recursion(
 
 	    /* Enhanced mode always uses \xyz as an octal character representation
 	     * but each terminal type must give us the actual output format wanted.
-	     * pdf.trm wanted the raw character code, which is why we use strtol();
-	     * most other terminal types want some variant of "\\%o".
+	     * Most terminal types want either "%c" or "\\%o".
 	     */
-	    if (p[1] >= '0' && p[1] <= '7') {
+	    if ((p[1] >= '0' && p[1] <= '3')
+	    &&  (p[2] >= '0' && p[2] <= '7')
+	    &&  (p[3] >= '0' && p[3] <= '7')) {
 		char *e, escape[16], octal[4] = {'\0','\0','\0','\0'};
-
 		octal[0] = *(++p);
-		if (p[1] >= '0' && p[1] <= '7') {
-		    octal[1] = *(++p);
-		    if (p[1] >= '0' && p[1] <= '7')
-			octal[2] = *(++p);
-		}
+		octal[1] = *(++p);
+		octal[2] = *(++p);
 		sprintf(escape, enhanced_escape_format, strtol(octal,NULL,8));
 		for (e=escape; *e; e++) {
 		    (term->enhanced_writec)(*e);

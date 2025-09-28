@@ -1063,7 +1063,7 @@ unsigned int
 rgb_from_colormap(double gray, udvt_entry *colormap)
 {
     struct value *palette = colormap->udv_value.v.value_array;
-    int size = palette[0].v.int_val;
+    int size = palette[0].v.array_header.size;
     unsigned int rgb;
 
 	rgb = (gray <= 0.0) ? palette[1].v.int_val
@@ -1259,7 +1259,7 @@ set_palette_colormap()
 
     free(sm_palette.gradient);
     sm_palette.gradient = NULL;
-    actual_size = colormap->udv_value.v.value_array[0].v.int_val;
+    actual_size = colormap->udv_value.v.value_array[0].v.array_header.size;
     sm_palette.gradient = gp_alloc( actual_size*sizeof(gradient_struct), "gradient" );
     sm_palette.gradient_num = actual_size;
 
@@ -1324,6 +1324,8 @@ set_palette_file()
 	int_error(c_token, "expecting filename or datablock");
 
     /* Same interlock as plot/splot/stats */
+    if (inside_plot_command)
+	int_error(c_token, "cannot read palette from file in this context");
     inside_plot_command = TRUE;
 
     df_set_plot_mode(MODE_QUERY);	/* Needed only for binary datafiles */

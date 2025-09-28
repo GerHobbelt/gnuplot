@@ -52,6 +52,7 @@ void f_pop(union argument *x);
 void f_call(union argument *x);
 void f_calln(union argument *x);
 void f_sum(union argument *x);
+void f_prod(union argument *x);
 void f_lnot(union argument *x);
 void f_bnot(union argument *x);
 void f_lor(union argument *x);
@@ -99,5 +100,8 @@ void f_lookup(union argument *x);
 void f_trim(union argument *x);
 void f_split(union argument *x);
 void f_join(union argument *x);
+
+void f_lock(union argument *x);
+void f_unlock(union argument *x);
 
 #endif /* GNUPLOT_INTERNAL_H */

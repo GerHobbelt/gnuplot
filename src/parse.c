@@ -95,6 +95,7 @@ static void parse_additive_expression(void);
 static void parse_multiplicative_expression(void);
 static void parse_unary_expression(void);
 static void parse_sum_expression(void);
+static void parse_prod_expression(void);
 static int  parse_assignment_expression(void);
 static int  parse_array_assignment_expression(void);
 static void parse_function_block(void);
@@ -242,7 +243,7 @@ string_or_express(struct at_type **atptr)
     for (i = 0; i < at->a_count; i++) {
 	enum operators op_index = at->actions[i].index;
 	if ( op_index == PUSHD1 || op_index == PUSHD2 || op_index == PUSHD
-	||   op_index == SUM ) {
+	||   op_index == SUM || op_index == PROD ) {
 	    has_dummies = TRUE;
 	    break;
 	}
@@ -270,6 +271,7 @@ string_or_express(struct at_type **atptr)
 	    free_value(&(df_array->udv_value));
 	    make_array_permanent(&val);
 	    df_array->udv_value = val;
+	    df_array->udv_value.v.value_array[0].v.array_header.parent = df_array;
 	    return array_placeholder;
 	}
     }
@@ -329,9 +331,10 @@ perm_at()
 struct at_type *
 create_call_column_at(char *string)
 {
-    struct at_type *at = gp_alloc(sizeof(int) + 2*sizeof(struct at_entry),"");
+    struct at_type *at = gp_alloc(2*sizeof(int) + 2*sizeof(struct at_entry),"");
 
     at->a_count = 2;
+    at->recursion_depth = 0;
     at->actions[0].index = PUSHC;
     at->actions[0].arg.j_arg = 0;
     at->actions[0].arg.v_arg.type = STRING;
@@ -347,9 +350,10 @@ create_call_column_at(char *string)
 struct at_type *
 create_call_columnhead()
 {
-    struct at_type *at = gp_alloc(sizeof(int) + 2*sizeof(struct at_entry),"");
+    struct at_type *at = gp_alloc(2*sizeof(int) + 2*sizeof(struct at_entry),"");
 
     at->a_count = 2;
+    at->recursion_depth = 0;
     at->actions[0].index = PUSHC;
     at->actions[0].arg.j_arg = 0;
     at->actions[0].arg.v_arg.type = INTGR;
@@ -520,9 +524,17 @@ parse_assignment_expression()
 	    }
 	}
 
+
+	/* assignment target */
+	m_capture(&varname,c_token,c_token);
+
+	/* Set interlock to protect the variable from corruption during assignment */
+	foo = add_action(LOCK);
+	foo->v_arg.type = STRING;
+	foo->v_arg.v.string_val = strdup(varname);
+
 	/* Push the name of the variable */
 	foo = add_action(PUSHC);
-	m_capture(&varname,c_token,c_token);
 	foo->v_arg.type = STRING;
 	foo->v_arg.v.string_val = varname;
 
@@ -533,6 +545,11 @@ parse_assignment_expression()
 	/* push the actual assignment operation */
 	foo = add_action(ASSIGN);
 	foo->v_arg.type = 0;	/* could be anything but ARRAY */
+
+	/* Note: the interlock is cleared as part of ASSIGN (f_assign) so that
+	 *       the refcount is returned to 0 just before the variable is replaced.
+	 */
+
 	return 1;
     }
 
@@ -612,6 +629,10 @@ parse_array_assignment_expression()
 	}
 
 	if (standard_at) {
+	    /* increment lock counter */
+	    foo = add_action(LOCK);
+	    foo->v_arg.type = STRING;
+	    foo->v_arg.v.string_val = strdup(varname);
 	    /* push the array name */
 	    foo = add_action(PUSHC);
 	    foo->v_arg.type = STRING;
@@ -792,6 +813,8 @@ parse_primary_expression()
 	    }
 	} else if (equals(c_token, "sum") && equals(c_token+1, "[")) {
 	    parse_sum_expression();
+	} else if (equals(c_token, "prod") && equals(c_token+1, "[")) {
+	    parse_prod_expression();
 	/* dummy_func==NULL is a flag to say no dummy variables active */
 	} else if (dummy_func) {
 	    if (equals(c_token, c_dummy_var[0])) {
@@ -1299,12 +1322,88 @@ parse_sum_expression()
     add_action(SUM)->udf_arg = udf;
 }
 
+/* create action code for 'prod' expressions */
+static void
+parse_prod_expression()
+{
+    /* prod [<var>=<start>:<end>] <expr>
+     * - <var> pushed to stack *by name*
+     * - <start> and <end> expressions pushed to stack
+     * - A new action table for <expr> is created and passed to f_sum(arg)
+     *   via arg->udf_arg
+     */
+
+    char *errormsg = "Expecting 'prod [<var> = <start>:<end>] <expression>'\n";
+    char *varname = NULL;
+    union argument *arg;
+    struct udft_entry *udf;
+
+    struct at_type * save_at;
+    int save_at_size;
+    int i;
+    
+    /* Caller already checked for string "prod [" so skip both tokens */
+    c_token += 2;
+
+    /* <var> */
+    if (!isletter(c_token))
+	int_error(c_token, errormsg);
+    m_capture(&varname, c_token, c_token);
+    arg = add_action(PUSHC);
+    Gstring(&(arg->v_arg), varname);
+    c_token++;
+
+    if (!equals(c_token, "="))
+	int_error(c_token, errormsg);
+    c_token++;
+
+    /* <start> */
+    parse_expression();
+
+    if (!equals(c_token, ":"))
+	int_error(c_token, errormsg);
+    c_token++;
+
+    /* <end> */
+    parse_expression();
+
+    if (!equals(c_token, "]"))
+	int_error(c_token, errormsg);
+    c_token++;
+
+    /* parse <expr> and convert it to a new action table.
+     * modeled on code from temp_at().
+     */
+    /* 1. save environment to restart parsing */
+    save_at = at;
+    save_at_size = at_size;
+    at = NULL;
+
+    /* 2. save action table in a user defined function */
+    udf = (struct udft_entry *) gp_alloc(sizeof(struct udft_entry), "prod");
+    udf->next_udf = (struct udft_entry *) NULL;
+    udf->udf_name = NULL; /* TODO maybe add a name and definition */ 
+    udf->at = perm_at();
+    udf->definition = NULL;
+    udf->dummy_num = 0;
+    for (i = 0; i < MAX_NUM_VAR; i++)
+	Ginteger(&(udf->dummy_values[i]), 0);
+
+    /* 3. restore environment */
+    at = save_at;
+    at_size = save_at_size;
+
+    /* pass the udf to f_sum using the argument */
+    add_action(PROD)->udf_arg = udf;
+}
+
 /* Fill in array elements read from the command line
  *    [ element1, element2, ... ]
  */
 void
-parse_array_constant( t_value *array )
+parse_array_constant( struct udvt_entry *udv )
 {
+    t_value *array = &(udv->udv_value);
     t_value *element;
     int current_size;
     int max_size;
@@ -1313,7 +1412,10 @@ parse_array_constant( t_value *array )
     if (array->type != ARRAY || !equals(c_token, "["))
 	return; /* should never happen */
 
-    current_size = array->v.value_array[0].v.int_val;
+    /* array reference count > 0 disallows an assignment operation that would clobber it */
+    udv->udv_refcount++;
+
+    current_size = array->v.value_array[0].v.array_header.size;
     max_size = current_size;
     c_token++;
 
@@ -1344,7 +1446,10 @@ parse_array_constant( t_value *array )
     }
     if (current_size == 0)
 	current_size = i-1;
-    array->v.value_array[0].v.int_val = current_size;
+    array->v.value_array[0].v.array_header.size = current_size;
+
+    /* array reference count > 0 disallows an assignment operation that would clobber it */
+    udv->udv_refcount--;
 
     /* trim off excess (not strictly necessary) */
     if (max_size > current_size) {
@@ -1438,6 +1543,7 @@ add_udv_local(int t_num, char *name, int locality)
     udv_ptr->udv_name = gp_strdup(name);
     udv_ptr->udv_value.type = NOTDEFINED;
     udv_ptr->locality = locality;
+    udv_ptr->udv_refcount = 0;
     return udv_ptr;
 }
 
@@ -1620,7 +1726,7 @@ check_for_iteration()
 		make_array_permanent(&v);
 		iteration_array = v;
 		iteration_start = 1;
-		iteration_end = v.v.value_array[0].v.int_val;
+		iteration_end = v.v.value_array[0].v.array_header.size;
 		free_value(&(iteration_udv->udv_value));
 		if (iteration_end > 0) {
 		    /* Skip to first non-empty entry slot */
@@ -1715,7 +1821,7 @@ reevaluate_iteration_limits(t_iterator *iter)
 	    make_array_permanent(&v);
 	    iter->iteration_array = v;
 	    iter->iteration_start = 1;
-	    iter->iteration_end = v.v.value_array[0].v.int_val;
+	    iter->iteration_end = v.v.value_array[0].v.array_header.size;
 	    if (iter->iteration_end > 0) {
 		/* Skip to first non-empty entry slot */
 		while ((iter->iteration_start <= iter->iteration_end)
@@ -2002,7 +2108,8 @@ split(const char *string, const char *sep)
 	if (++thisword > size) {
 	    size = size + strlen(string)/8 + 1;
 	    array = gp_realloc(array, (size+1) * sizeof(t_value), "split");
-	    array[0].v.int_val = thisword;
+	    array[0].v.array_header.size = thisword;
+	    array[0].v.array_header.parent = NULL;
 	    for (i = thisword; i <= size; i++)
 		array[i].type = NOTDEFINED;
 	}
@@ -2043,7 +2150,7 @@ split(const char *string, const char *sep)
 
     /* Trim off any extra allocated space */
     array = gp_realloc(array, (thisword+1) * sizeof(t_value), "split");
-    array[0].v.int_val = thisword;
+    array[0].v.array_header.size = thisword;
     array[0].type = TEMP_ARRAY;
 
     return array;

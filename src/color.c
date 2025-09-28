@@ -392,10 +392,16 @@ colorbox_draw_polygon(// output
 {
     if (color_box.rotation == 'v') {
         corners[0].y = corners[1].y = xy;
-        corners[2].y = corners[3].y = GPMIN(xy_to,xy2+1);
+	if (color_box.invert)
+	    corners[2].y = corners[3].y = GPMAX(xy_to,xy2+1);
+	else
+	    corners[2].y = corners[3].y = GPMIN(xy_to,xy2+1);
     } else {
         corners[0].x = corners[3].x = xy;
-        corners[1].x = corners[2].x = GPMIN(xy_to,xy2+1);
+	if (color_box.invert)
+	    corners[1].x = corners[2].x = GPMAX(xy_to,xy2+1);
+	else
+	    corners[1].x = corners[2].x = GPMIN(xy_to,xy2+1);
     }
 
     /* print the rectangle with the given colour */
@@ -624,8 +630,10 @@ draw_inside_colorbox_bitmap_smooth()
 {
     /* The primary beneficiary of the image variant is cairo + pdf,
      * since it avoids banding artifacts in the filled_polygon variant.
+     * However, the image rendering code does not pay attention to fillstyle.
      */
-    if ((term->flags & TERM_COLORBOX_IMAGE) && !color_box.invert)
+    if ((term->flags & TERM_COLORBOX_IMAGE)
+    &&  !color_box.invert && (style_from_fill(&default_fillstyle) == FS_OPAQUE))
         draw_inside_colorbox_bitmap_smooth__image();
     else
         draw_inside_colorbox_bitmap_smooth__filled_polygon();

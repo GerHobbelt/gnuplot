@@ -1462,6 +1462,16 @@ do_3dplot(
 		    key_sample_fill(xl, yl, this_plot);
 		    break;
 
+		case PM3DSURFACE: {
+			t_colorspec fillcolorspec = this_plot->fill_properties.border_color;
+			if ((fillcolorspec.type == TC_RGB && fillcolorspec.value >= 0 )
+			||  fillcolorspec.type == TC_LINESTYLE) {
+				apply_pm3dcolor(&this_plot->fill_properties.border_color);
+				key_sample_fill(xl, yl, this_plot);
+			}
+		    break;
+		}
+
 		case PLOT_STYLE_NONE:
 		    /* cannot happen */
 		default:
@@ -2448,8 +2458,6 @@ check_corner_height(
 {
     if (p->type != INRANGE)
 	return;
-    /* FIXME HBB 20010121: don't compare 'zero' to data values in
-     * absolute terms. */
     if ((fabs(p->x - X_AXIS.min) < zero || fabs(p->x - X_AXIS.max) < zero) &&
 	(fabs(p->y - Y_AXIS.min) < zero || fabs(p->y - Y_AXIS.max) < zero)) {
 	int x = MAP_HEIGHT_X(p->x);
@@ -3803,8 +3811,29 @@ key_sample_fill(int xl, int yl, struct surface_points *this_plot)
 	return;
     }
 
-    /* solid-fill rectangle in current color */
-    (term->fillbox)(style,x,y,w,h);
+    /* Plot style 'pm3d fc linestyle N' wants key sample with top/bottom color */
+    if (this_plot->plot_style == PM3DSURFACE
+    &&  fs->border_color.type == TC_LINESTYLE
+    &&  fs->border_color.lt != fs->border_color.lt+1) {
+	gpiPoint tri[3];
+	struct lp_style_type lp;
+	/* top color */
+	lp_use_properties(&lp, fs->border_color.lt);
+	term_apply_lp_properties(&lp);
+	tri[0].style = style;
+	tri[0].x = x;   tri[0].y = y;
+	tri[1].x = x+w; tri[1].y = y+h;
+	tri[2].x = x; tri[2].y = y+h;
+	(term->filled_polygon)(3,tri);
+	/* bottom color */
+	lp_use_properties(&lp, fs->border_color.lt+1);
+	term_apply_lp_properties(&lp);
+	tri[2].x = x+w; tri[2].y = y;
+	(term->filled_polygon)(3,tri);
+    } else {
+	/* solid-fill rectangle in current color */
+	(term->fillbox)(style,x,y,w,h);
+    }
 
     /* Some plot styles never want a border in the key sample */
     if (this_plot->plot_style == ZERRORFILL || this_plot->plot_style == FILLEDCURVES)
@@ -3822,6 +3851,8 @@ key_sample_fill(int xl, int yl, struct surface_points *this_plot)
     else if ((this_plot->plot_style & PLOT_STYLE_HAS_PM3DBORDER)) {
 	if (pm3d.border.l_type != LT_NODRAW && pm3d.border.l_type != LT_DEFAULT)
 	    term_apply_lp_properties(&pm3d.border);
+	else if (this_plot->plot_style == PM3DSURFACE)
+	    return;
     } else {
 
     /* Should not happen */
@@ -4189,7 +4220,7 @@ plot3d_boxes(struct surface_points *plot)
 
 	    /* Copy variable color value into plot header for pm3d_add_quadrangle */
 	    if (plot->pm3d_color_from_column)
-		plot->lp_properties.pm3d_color.lt =  points[i].CRD_COLOR;
+		plot->lp_properties.pm3d_color.lt =  (unsigned) points[i].CRD_COLOR;
 
 	    /* Construct and store single pm3d rectangle (front of box) */
 	    /* Z	corner1	corner2	*/

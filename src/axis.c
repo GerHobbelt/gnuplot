@@ -607,7 +607,7 @@ copy_or_invent_formatstring(struct axis *this_axis)
 	/* The simple case: formatstring is usable, so use it! */
 	safe_strncpy(tempfmt, this_axis->formatstring, MAX_ID_LEN);
 	/* Ensure enough precision to distinguish tics */
-	if (!strcmp(tempfmt, DEF_FORMAT)) {
+	if (is_def_format(tempfmt)) {
 	    double axmin = this_axis->min;
 	    double axmax = this_axis->max;
 	    int precision = ceil(-log10(GPMIN(fabs(axmax-axmin),fabs(axmin))));
@@ -1340,7 +1340,10 @@ gen_tics(struct axis *this, tic_callback callback)
 		internal = (this->tictype == DT_TIMEDATE)
 		    ? time_tic_just(this->timelevel, tic)
 		    : tic;
-		user = CheckZero(internal, step);
+		user = internal;
+		/* If the tic would be placed almost at zero, make it exact */
+		if (fabs(internal/step) < SIGNIF)
+		    user = 0.0;
 	    }
 	    /* }}} */
 
@@ -2092,7 +2095,6 @@ tic_count_callback(struct axis *this_axis, double place, char *text,
 void
 save_writeback_all_axes()
 {
-    /* version 6.1 note:  this used to only include NUMBER_OF_MAIN_VISIBLE_AXES */
     for (AXIS_INDEX axis = 0; axis < AXIS_ARRAY_SIZE; axis++) {
 	axis_array[axis].writeback_min = axis_array[axis].min;
 	axis_array[axis].writeback_max = axis_array[axis].max;

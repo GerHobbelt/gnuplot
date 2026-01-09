@@ -118,7 +118,7 @@ DLLEXPORT struct value nsinc(int nargs, struct value *arg, void *p)
 #include <time.h>	/* to generate the timestamp */
 
 /* Prototype for exported function */
-struct value newdata(int n, struct value *v, void *p);
+DLLEXPORT struct value newdata(int n, struct value *v, void *p);
 
 DLLEXPORT void *gnuplot_init(exfn_t exported_function)
 {

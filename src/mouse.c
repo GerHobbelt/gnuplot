@@ -753,7 +753,7 @@ GetRulerString(char *p, double x, double y)
 	if (mouse_setting.polardistance == 1) { /* (distance, angle) */
 	    phi = (180 / M_PI) * atan2(y - ry, x - rx);
 # ifdef OS2
-	    strcat(format, ";% #.4gø)");
+	    strcat(format, ";% #.4gÃ¸)");
 # else
 	    strcat(format, ", % #.4gdeg)");
 # endif

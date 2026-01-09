@@ -623,7 +623,7 @@ void wxtFrame::OnExport( wxCommandEvent& WXUNUSED( event ) )
 
 		RECT rect;
 		rect.left = rect.top = 0;
-		unsigned dpi = GetDPI();
+		unsigned dpi = ::GetDPI();
 		rect.right  = MulDiv(panel->plot.device_xmax, dpi, 10);
 		rect.bottom = MulDiv(panel->plot.device_ymax, dpi, 10);
 		HDC hmf = CreateEnhMetaFileW(NULL, fullpathFilename.wc_str(), &rect, NULL);
@@ -693,7 +693,7 @@ void wxtFrame::OnPrint( wxCommandEvent& WXUNUSED( event ) )
 		wxSize ppi = wxdc->GetPPI();
 		unsigned dpi = 96;
 #ifdef _WIN32
-		dpi = GetDPI();
+		dpi = ::GetDPI();
 #endif
 		double scaleX = ppi.GetWidth() / (double) dpi;
 		double scaleY = ppi.GetHeight() / (double) dpi;
@@ -2737,7 +2737,10 @@ void wxt_modify_plots(unsigned int ops, int plotno)
 			wxt_key_boxes[i].hidden = TRUE;
 		}
 	}
-	wxt_current_panel->wxt_cairo_refresh();
+	// Suppressing the refresh reduces flicker during animation but may be
+	// counterproductive in the single-frame case
+	if (!in_multiplot)
+	    wxt_current_panel->wxt_cairo_refresh();
 	// Empirically, without this Update() the plots are toggled correctly but the
 	// change may not show on the screen until a mouse or other event next arrives
 	wxt_current_panel->Update();

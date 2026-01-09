@@ -83,11 +83,11 @@ UNICODE=1
 # fontconfig or iconv; then, uncomment GDAUTOCONFIGLIBS so that all of the
 # libraries needed for linking will be taken by running 'gdlib-config'.
 # Uncomment BGD if you want to use the binary DLL version of libgd.
-#NEWGD=1
-#JPEG=1
-#FREETYPE=1
+NEWGD=1
+JPEG=1
+FREETYPE=1
 #GDAUTOCONFIGLIBS=1
-#GDPKGCONFIG=1
+GDPKGCONFIG=1
 #BGD=1
 
 # PDF device driver
@@ -114,21 +114,21 @@ MOUSE=1
 # Cairo/Pango terminals
 # Uncomment the following lines to select the pngcairo and pdfcairo
 # terminals
-#CAIROTERMS=1
-#CAIROLIBS=1
+CAIROTERMS=1
+CAIROLIBS=1
 
 # wxt interactive terminal
 # Requires wxWidgets, Cairo, Pango, and their respective dependencies.
 # Uncomment the following lines to compile it.
-#WXT=1
-#CAIROLIBS=1
+WXT=1
+CAIROLIBS=1
 
 # Include webp terminal 
 # Requires webp lib and cairo libraries.
-#WEBP=1
+WEBP=1
 
 # Build qt terminal?
-#QT=1
+QT=1
 # Uncomment to build with Qt6 instead of Qt5
 #QT6=1
 # specify QT installation directory
@@ -155,7 +155,7 @@ QT_BIN = $(QT_DIR)/bin
 endif
 
 # Uncomment the following line to select the lua/tikz terminal
-#LUA=lua
+LUA=lua
 
 # Uncomment the following line to select the caca terminal
 # Requires libcaca version 0.99.beta15 or newer. A post-beta18
@@ -177,15 +177,6 @@ OPENSPECFUN=1
 # Uncomment if console mode gnuplot should use GNU readline
 # (not recommended)
 #GNUREADLINE=1
-
-# Uncomment if you want to use watchpoints
-#WATCHPOINTS=1
-
-# Uncomment if you want to use polar grid
-#POLAR_GRID=1
-
-# Uncomment if you want to use functionblocks
-#FUNCTIONBLOCKS=1
 
 # Uncomment if you want a stable sort for pm3d and hidden3d surfaces
 #STABLE_SORT=1
@@ -272,6 +263,7 @@ GNUSORT = /bin/sort
 # because the setup file of gnuplot installer is now encoded utf-8 with BOM.
 ISCC = $(PROGRAMFILES32)/Inno\ Setup\ 6/iscc
 
+# Include non-system DLLs in distribution
 #DLLS = 1
 
 # Directory that might contain extra files to be shipped with the installer.
@@ -283,6 +275,9 @@ else
 #EXTRADIST = /d/gnuplot/dist64
 endif
 else
+ifdef CLANG64
+#EXTRADIST = /d/gnuplot/dist64
+endif
 #EXTRADIST = /d/gnuplot/dist
 endif
 
@@ -308,9 +303,11 @@ else
 CFLAGS += -m64
 endif
 else
+ifndef CLANG64
 # MINGW32 always produces 32bit executables
 ifndef M32
 M32=1
+endif
 endif
 endif
 
@@ -336,6 +333,7 @@ LDX = $(CXX)
 
 RM = rm -f
 CP = cp -p
+MV = mv -f
 
 ifdef DEBUG
   CFLAGS += -g -Wall -pipe
@@ -388,7 +386,6 @@ endif
 HELPFILE = wgnuplot.chm
 HELPFILEJA = wgnuplot-ja.chm
 CFLAGS += -I$(HHWPATH)include
-BUILDHELPFILE = $(D)windows/$(HELPFILE)
 
 ifdef NEWGD
   GD=1
@@ -524,7 +521,11 @@ endif
 	MOC = $(QT_BIN)/moc
 	UIC = $(QT_BIN)/uic
 	RCC = $(QT_BIN)/rcc
-	LRELEASE = $(QT_BIN)/lrelease
+ifdef QT6
+	LRELEASE = lrelease-qt6
+else
+	LRELEASE = lrelease
+endif
 	QT_FILES_TARGETS  = qrc_QtGnuplotResource.cpp ui_QtGnuplotSettings.h moc_QtGnuplotWindow.cpp moc_QtGnuplotApplication.cpp 
 	QT_FILES_TARGETS += moc_QtGnuplotWidget.cpp moc_QtGnuplotScene.cpp moc_QtGnuplotEvent.cpp
 	QT_TRANSLATION = qtgnuplot_fr.qm qtgnuplot_ja.qm
@@ -585,18 +586,6 @@ else
 	CFLAGS += -DREADLINE
 endif
 
-ifdef WATCHPOINTS
-	CFLAGS += -DUSE_WATCHPOINTS
-endif
-
-ifdef POLAR_GRID
-	CFLAGS += -DUSE_POLAR_GRID
-endif
-
-ifdef FUNCTIONBLOCKS
-	CFLAGS += -DUSE_FUNCTIONBLOCKS
-endif
-
 ifdef STABLE_SORT
 	CFLAGS += -DWITH_STABLE_SORT
 endif
@@ -641,7 +630,11 @@ FULLVERSION := $(MAINVERSION) patchlevel $(PATCHLEVEL)
 
 TARGETS_PLAIN = $(VERSIONING) config.h wgnuplot.exe wgnuplot.mnu $(QT_TARGET)
 ifndef MINGW64
+ifdef CLANG64
+	EXTRA_CPPFLAGS_PLAIN += -DPIPES
+else
 	EXTRA_CPPFLAGS_PLAIN += -DUSE_FAKEPIPES
+endif
 else
 	EXTRA_CPPFLAGS_PLAIN += -DPIPES
 endif
@@ -858,17 +851,18 @@ demo_plugin.dll: $(M)plugin/demo_plugin.c
 	$(CC) $(CFLAGS) -I$(M)plugin -shared -o $@ $<
 
 # convert gnuplot.doc to windows/wgnuplot.html
-$(BUILDHELPFILE): doc2html.exe $(D)gnuplot.doc $(D)windows/wgnuplot.hhp $(D)windows/wgnuplot.hhk \
+$(HELPFILE): doc2html.exe $(D)gnuplot.doc $(D)windows/wgnuplot.hhp $(D)windows/wgnuplot.hhk \
                   $(D)windows/wgnuplot.stp $(D)plotstyles.gnu $(D)morefigures.gnu \
                   $(CORETERM) $(TARGET)
-	./doc2html $(D)gnuplot.doc $(D)windows/
+	-mkdir chm
+	-$(CP) -r $(D)windows/wgnuplot.* chm/
+	./doc2html $(D)gnuplot.doc chm/
 	-./$(TARGET) -d -e "winhelp=1; cd '$(D)'" plotstyles.gnu
 	-./$(TARGET) -d -e "winhelp=1; cd '$(D)'" morefigures.gnu
-	-$(CP) $(D)html/*.png $(D)windows/
-	-$(HHC) $(D)windows/wgnuplot.hhp
-
-$(HELPFILE): $(BUILDHELPFILE)
-	$(CP) $^ $@
+	-$(MV) $(D)windows/figure_*.png chm/
+	-$(CP) $(D)html/*.png chm/
+	-$(HHC) chm/wgnuplot.hhp
+	-$(CP) chm/wgnuplot.chm wgnuplot.chm
 
 htmlhelp.def: /c/Windows/System32/hhctrl.ocx
 ifndef MINGW64
@@ -924,18 +918,17 @@ wgnuplot-ja.chm: $(JASRC) doc2html-ja.exe \
 	# Change character encoding from EUC-JP to SHIFT-JIS
 	-iconv -c -s -f EUC-JP -t SHIFT-JIS $(JADW)wgnuplot.html > $(JADW)wgnuplot-ja.html
 	-iconv -c -s -f EUC-JP -t SHIFT-JIS $(JADW)wgnuplot.hhc > $(JADW)wgnuplot-ja.hhc
-	cp $(JADW)wgnuplot-ja.html $(JADW)wgnuplot.html
-	cp $(JADW)wgnuplot-ja.hhc $(JADW)wgnuplot.hhc
+	$(MV) $(JADW)wgnuplot-ja.html $(JADW)wgnuplot.html
+	$(MV) $(JADW)wgnuplot-ja.hhc $(JADW)wgnuplot.hhc
 	# Adjust Encoding and Language information
-	sed -i -e "s/charset=utf-8/charset=shift-jis/" $(JADW)wgnuplot.html
-	sed -i -e "s/charset=utf-8/charset=shift-jis/" $(JADW)wgnuplot.hhc
 	sed -i -e "s/Language=0x409 Englisch (USA)/Language=0x411 Japanisch (Japan)/" $(JADW)/wgnuplot.hhp
+	sed -i -e "s/Compiled file=wgnuplot.chm/Compiled file=wgnuplot-ja.chm/" $(JADW)/wgnuplot.hhp
 	# Build help file
 	-./$(TARGET) -d -e "winhelp=1; cd '$(JAD)'" plotstyles.gnu
 	-./$(TARGET) -d -e "winhelp=1; cd '$(JAD)'" morefigures.gnu
 	-$(CP) $(D)html/*.png $(JADW)
 	-$(HHC) $(JADW)wgnuplot.hhp
-	cp $(JADW)wgnuplot.chm $(HELPFILEJA)
+	-$(CP) $(JADW)wgnuplot-ja.chm $(HELPFILEJA)
 
 doc2html.exe: $(CORETERM) $(D)windows/doc2html.c $(D)termdoc.c $(D)xref.c version.o $(LUA_HELP)
 	$(LD) $(LDFLAGS) -o $@ -DWINDOWS_NO_GUI \
@@ -1143,6 +1136,7 @@ clean:
 	-$(RM) doc2html.exe
 	-$(RM) timestamp.h *.tmp *.par
 	-$(RM) -rf ./dist/ ./gnuplot/
+	-$(RM) -rf chm
 	-$(RM) -rf $(JA)
 	-$(RM) allterm-ja.h gnuplot-figures-ja.tex
 	-$(RM) doc2html-ja.exe doc2tex-ja.exe
@@ -1251,23 +1245,35 @@ ifdef MINGW64
 ifndef M32
 ifdef QT
 	ldd gnuplot.exe gnuplot_qt.exe | cut -d " " -f 3 | grep "^/mingw64/bin" | sort | uniq | xargs -t -i cp {} $(DESTDIR)/bin
-	-mkdir $(DESTDIR)/bin/platforms
-	cp /mingw64/share/qt5/plugins/platforms/qminimal.dll $(DESTDIR)/bin/platforms
-	cp /mingw64/share/qt5/plugins/platforms/qwindows.dll $(DESTDIR)/bin/platforms
 else
 	ldd gnuplot.exe | cut -d " " -f 3 | grep "^/mingw64/bin" | sort | uniq | xargs -t -i cp {} $(DESTDIR)/bin
 endif # QT
 else # !M32
 ifdef QT
 	ldd gnuplot.exe gnuplot_qt.exe | cut -d " " -f 3 | grep "^/mingw32/bin" | sort | uniq | xargs -t -i cp {} $(DESTDIR)/bin
-	-mkdir $(DESTDIR)/bin/platforms
-	cp /mingw32/share/qt5/plugins/platforms/qminimal.dll $(DESTDIR)/bin/platforms
-	cp /mingw32/share/qt5/plugins/platforms/qwindows.dll $(DESTDIR)/bin/platforms
 else
 	ldd gnuplot.exe | cut -d " " -f 3 | grep "^/mingw32/bin" | sort | uniq | xargs -t -i cp {} $(DESTDIR)/bin
 endif # QT
 endif # M32
 endif # MINGW64
+ifdef CLANG64
+ifdef QT
+	ldd gnuplot.exe gnuplot_qt.exe | cut -d " " -f 3 | grep "^/clang64/bin" | sort | uniq | xargs -t -i cp {} $(DESTDIR)/bin
+else
+	ldd gnuplot.exe | cut -d " " -f 3 | grep "^/clang64/bin" | sort | uniq | xargs -t -i cp {} $(DESTDIR)/bin
+endif # QT
+endif
+ifdef QT
+	-mkdir $(DESTDIR)/bin/platforms
+ifdef QT6
+	cp $(QT_DIR)/share/qt6/plugins/platforms/qminimal.dll $(DESTDIR)/bin/platforms
+	cp $(QT_DIR)/share/qt6/plugins/platforms/qwindows.dll $(DESTDIR)/bin/platforms
+else
+	cp $(QT_DIR)/share/qt5/plugins/platforms/qminimal.dll $(DESTDIR)/bin/platforms
+	cp $(QT_DIR)/share/qt5/plugins/platforms/qwindows.dll $(DESTDIR)/bin/platforms
+endif
+endif
+
 endif # DLLS
 
 installer:
@@ -1286,8 +1292,8 @@ installer:
 ifndef M32
 	sed -i \
 	    -e "s/@INSTALLER@/gp$(SHORTVERSION)-win64-setup/" \
-	    -e 's/^\(ArchitecturesAllowed\)=/\1=x64/g' \
-	    -e 's/^\(ArchitecturesInstallIn64BitMode\)=/\1=x64/g' \
+	    -e 's/^\(ArchitecturesAllowed\)=/\1=x64compatible/g' \
+	    -e 's/^\(ArchitecturesInstallIn64BitMode\)=/\1=x64compatible/g' \
 	    ./dist/gnuplot.iss
 else
 	sed -i \
@@ -1329,19 +1335,19 @@ endif
 	$(MAKE) DESTDIR=./gnuplot install
 ifndef M32
 ifdef RELEASE
-	7za u -mx9 gp$(SHORTVERSION)-win64-mingw.7z gnuplot
+	7z u -mx9 gp$(SHORTVERSION)-win64-mingw.7z gnuplot
 else
-	7za u -mx9 gp$(SHORTVERSION)-`date +%Y%m%d`-win64-mingw.7z gnuplot
+	7z u -mx9 gp$(SHORTVERSION)-`date +%Y%m%d`-win64-mingw.7z gnuplot
 endif
 else
 ifdef RELEASE
-	7za u -mx9 gp$(SHORTVERSION)-win32-mingw.7z gnuplot
+	7z u -mx9 gp$(SHORTVERSION)-win32-mingw.7z gnuplot
 else
-	7za u -mx9 gp$(SHORTVERSION)-`date +%Y%m%d`-win32-mingw.7z gnuplot
+	7z u -mx9 gp$(SHORTVERSION)-`date +%Y%m%d`-win32-mingw.7z gnuplot
 endif
 endif
 
 # rebuild makefile.all
-maint: 
+maint:
 	-$(RM) $(S)/makefile.all $(S)/makefile.awc
 	$(MAKE) -C $(S) srcdir=. top_srcdir=.. -f Makefile.maint makefile.all makefile.awc

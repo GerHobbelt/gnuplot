@@ -624,7 +624,7 @@ void
 do_string_and_free(char *cmdline)
 {
 #ifdef USE_MOUSE
-    if (display_ipc_commands())
+    if (display_ipc_commands() && !multiplot_playback)
 	fprintf(stderr, "%s\n", cmdline);
 #endif
 
@@ -1299,9 +1299,11 @@ clear_command()
     term_start_plot();
 
     if (in_multiplot) {
-	(*term->fillbox)(FS_EMPTY, panel_bounds.xleft, panel_bounds.ybot,
-		    panel_bounds.xright - panel_bounds.xleft,
-		    panel_bounds.ytop - panel_bounds.ybot);
+	int p = multiplot_current_panel();
+	(*term->fillbox)(FS_EMPTY, panel_bounds[p].xleft, panel_bounds[p].ybot,
+		    panel_bounds[p].xright - panel_bounds[p].xleft,
+		    panel_bounds[p].ytop - panel_bounds[p].ybot);
+	panel_flags[p] = 0;
     }
     term_end_plot();
 
@@ -2252,10 +2254,6 @@ plot_command()
     add_udv_by_name("MOUSE_SHIFT")->udv_value.type = NOTDEFINED;
     add_udv_by_name("MOUSE_ALT")->udv_value.type = NOTDEFINED;
     add_udv_by_name("MOUSE_CTRL")->udv_value.type = NOTDEFINED;
-    if (multiplot_playback) {
-	/* This will only get applied to a multiplot panel with active mousing */
-	apply_saved_zoom();
-    }
 #endif
     if (evaluate_inside_functionblock && inside_plot_command)
 	int_error(NO_CARET, "plot command not available in this context");
@@ -2303,8 +2301,8 @@ print_set_output(char *name, TBOOLEAN datablock, TBOOLEAN append_p)
 	return;
     }
 
-#ifdef PIPES
     if (name[0] == '|') {
+#ifdef PIPES
 	restrict_popen();
 	print_out = popen(name + 1, "w");
 	if (!print_out)
@@ -2312,8 +2310,10 @@ print_set_output(char *name, TBOOLEAN datablock, TBOOLEAN append_p)
 	else
 	    print_out_name = name;
 	return;
-    }
+#else
+	int_error(c_token-1, "This copy of gnuplot does not support piped output");
 #endif
+    }
 
     if (!datablock) {
 	print_out = fopen(name, append_p ? "a" : "w");
@@ -2750,14 +2750,15 @@ save_command()
 	append = TRUE;
 	c_token++;
     }
-#ifdef PIPES
     if (save_file[0]=='|') {
+#ifdef PIPES
 	restrict_popen();
 	fp = popen(save_file+1,"w");
 	ispipe = TRUE;
-    } else
+#else
+	int_error(c_token-1, "this copy of gnuplot does not support piped output");
 #endif
-    {
+    } else {
     gp_expand_tilde(&save_file);
 #ifdef _WIN32
     fp = !strcmp(save_file,"-") ? stdout
@@ -2932,7 +2933,8 @@ $PALETTE u 1:2 t 'red' w l lt 1 lc rgb 'red',\
 '' u 1:5 t 'NTSC' w l lt 1 lc rgb 'black'\
 \n";
 
-    FILE *f = tmpfile();
+    FILE *f;
+    gp_open_tempfile(f);	/* syscfg macro! */
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
     /* On Vista/Windows 7 tmpfile() fails. */
@@ -2990,8 +2992,9 @@ $PALETTE u 1:2 t 'red' w l lt 1 lc rgb 'red',\
     save_pixmaps(f);
 
     /* execute all commands from the temporary file */
-    rewind(f);
+    gp_rewind_tempfile(f);
     load_file(f, NULL, 1); /* note: it does fclose(f) */
+    gp_free_tempfile(f);
 
     /* enable reset_palette() and restore replot line */
     enable_reset_palette = 1;
@@ -3641,8 +3644,10 @@ do_system(const char *cmd)
 	ierr = _wsystem(wcmd);
 	free(wcmd);
     }
-#else
+#elif defined(HAVE_SYSTEM)
     ierr = system(cmd);
+#else
+    int_error(NO_CARET, "This copy of gnuplot does not support system commands");
 #endif
     report_error(ierr);
 }
@@ -3799,7 +3804,7 @@ do_shell()
     (void) putc('\n', stderr);
 }
 
-#  else				/* !OS2 */
+#elif defined(HAVE_SYSTEM) /* !OS2 */
 
 /* plain old Unix */
 
@@ -3819,6 +3824,14 @@ do_shell()
 	    os_error(NO_CARET, "system() failed");
     }
     (void) putc('\n', stderr);
+}
+
+#else // !HAVE_SYSTEM
+
+void
+do_shell()
+{
+    int_error(NO_CARET, "This copy of gnuplot does not support bare shell commands");
 }
 
 # endif				/* !MSDOS */
@@ -3912,10 +3925,11 @@ gp_get_string(char * buffer, size_t len, const char * prompt)
     else
 	return fgets_ipc(buffer, len);
 # else
+    char *line;
     if (interactive)
 	PUT_STRING(prompt);
 
-    char *line = GET_STRING(buffer, len);
+    line = GET_STRING(buffer, len);
 
     if (interactive && line) {
 	line[strcspn(line, "\n")] = '\0';

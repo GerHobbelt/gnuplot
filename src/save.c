@@ -206,6 +206,10 @@ save_colormaps(FILE *fp)
 	if (udv->udv_value.type != NOTDEFINED) {
 	    if (udv->udv_value.type == ARRAY
 	    &&  udv->udv_value.v.value_array[0].type == COLORMAP_ARRAY) {
+		if (!strcmp(udv->udv_name, "viridis") || !strcmp(udv->udv_name, "magma")) {
+		    /* No need to save the built-in colormaps */
+		    ;
+		} else {
 		    double cm_min, cm_max;
 		    fprintf(fp,"array %s[%d] colormap = ", udv->udv_name,
 			(int)(udv->udv_value.v.value_array[0].v.array_header.size));
@@ -215,6 +219,7 @@ save_colormaps(FILE *fp)
 		    if (cm_min != cm_max)
 			fprintf(fp,"set colormap %s range [%g:%g]\n",
 				udv->udv_name, cm_min, cm_max);
+		}
 	    }
 	}
 	udv = udv->next_udv;
@@ -2123,7 +2128,7 @@ save_contourfill(FILE *fp)
 }
 
 /* Internal implementation of contributed script "gpsavediff".
- * Not supported on Windows because it shuffles output via
+ * Not supported on Windows and Wasm because it shuffles output via
  * /dev/fd/ a.k.a. /proc/self/fd
  * to access the initial state that was saved to stream savefp=tmpfile()
  * when the program was started and another tmpfile opened here.
@@ -2134,7 +2139,7 @@ FILE *savefp = NULL;	/* tmpfile used by "save changes" */
 void
 save_changes(FILE *outfp, TBOOLEAN ispipe)
 {
-#if !defined(WIN32) && !defined(OS2) && !defined(MSDOS)
+#if !defined(WIN32) && !defined(OS2) && !defined(MSDOS) && !defined(__wasm__)
     FILE *currentfp;
     char command[1024];
     char *output;	/* text returned by do_system_func() */

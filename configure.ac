@@ -762,17 +762,10 @@ dnl end caca
 
 dnl Process rest of with and enable options
 
-dnl EXPERIMENTAL support for concave hulls via Delaunay triangulation and chi-shapes
-AC_ARG_ENABLE(chi-shapes,dnl
-[  --disable-chi-shapes    no support for Delaunay triangulation or chi-shapes],,)
-if test "$enable_chi_shapes" != no; then
-    AC_DEFINE(WITH_CHI_SHAPES,1,
-              [ Define to support Delaunay triangulation and chi-shapes ])
-fi
 dnl without-extra-coordinate may leave a hole in "struct coordinate"
 AC_ARG_ENABLE(extra-coordinate,dnl
 [  --disable-extra-coordinate    leave possible hole in struct coordinate],,)
-if test "$enable_extra_coordinate" != no -o "$enable_chi_shapes" != no; then
+if test "$enable_extra_coordinate" != no; then
      AC_DEFINE(WITH_EXTRA_COORDINATE,1,
                [ Define to make use of otherwise empty space in struct coordinate ])
 fi
@@ -1042,17 +1035,6 @@ if test "${with_cairo}" = yes; then
       with_webp=no
   )
 fi
-
-dnl Enable polar mode gridded surface plots
-AC_ARG_ENABLE(polar-grid,dnl
-[  --enable-polar-grid     include support for gridded polar surface plots],
-  [if test "$enableval" != no; then
-    AC_DEFINE(USE_POLAR_GRID,1,
-               [ Define to support polar gridded surface plots])
-   fi],
-    AC_DEFINE(USE_POLAR_GRID,1,
-               [ Define to support polar gridded surface plots])
-  )
 
 dnl Enable subsystem to generate statistical summary of file contents
 AC_ARG_ENABLE(stats,dnl
@@ -1564,22 +1546,10 @@ else
   AC_MSG_RESULT([  Support watchpoints during 2D plotting:          no (--enable-watchpoints to enable)])
 fi
 
-if test "$enable_polar_grid" != no; then
-  AC_MSG_RESULT([  Support for polar gridded surfaces:              yes])
-else
-  AC_MSG_RESULT([  Support for polar gridded surfaces:              no (--enable-polar-grid to enable)])
-fi
-
 if test "$enable_function_blocks" != no; then
   AC_MSG_RESULT([  Support function blocks:                         yes])
 else
   AC_MSG_RESULT([  Support function blocks:                         no (--enable-function-blocks to enable)])
-fi
-
-if test "$enable_chi_shapes" != no; then
-  AC_MSG_RESULT([  Support concave hulls:                           yes])
-else
-  AC_MSG_RESULT([  Support concave hulls:                           no (--enable-chi-shapes to enable)])
 fi
 
 AC_MSG_RESULT([])

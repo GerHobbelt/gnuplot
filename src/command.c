@@ -1102,9 +1102,13 @@ is_array_assignment()
     if (!looks_OK)
 	return FALSE;
 
+    if (type_udv(c_token) != ARRAY) {
+	int_error(c_token,
+	    (type_udv(c_token) == STRING)
+		? "Substring replacement not supported"
+		: "Not a known array");
+    }
     udv = add_udv(c_token);
-    if (udv->udv_value.type != ARRAY)
-	int_error(c_token, "Not a known array");
 
     /* array reference count > 0 disallows an assignment operation that would clobber it */
     udv->udv_refcount++;
@@ -1204,7 +1208,7 @@ bind_command()
 	char *first = gp_input_line + token[c_token].start_index;
 	int size = strcspn(first, " \";");
 	lhs = gp_alloc(size + 1, "bind_command->lhs");
-	safe_strncpy(lhs, first, size);
+	safe_strncpy(lhs, first, size+1);
 	FPRINTF((stderr,"Got bind unquoted lhs = \"%s\"\n",lhs));
 	while (gp_input_line + token[c_token].start_index < first+size)
 	    c_token++;
@@ -2294,7 +2298,7 @@ void
 print_set_output(char *name, TBOOLEAN datablock, TBOOLEAN append_p)
 {
     if (print_out && print_out != stderr && print_out != stdout) {
-#ifdef PIPES
+#if defined(PIPES)
 	if (print_out_name[0] == '|') {
 	    if (0 > pclose(print_out))
 		perror(print_out_name);
@@ -2320,7 +2324,7 @@ print_set_output(char *name, TBOOLEAN datablock, TBOOLEAN append_p)
     }
 
     if (name[0] == '|') {
-#ifdef PIPES
+#if defined(PIPES)
 	restrict_popen();
 	print_out = popen(name + 1, "w");
 	if (!print_out)
@@ -2769,12 +2773,12 @@ save_command()
 	c_token++;
     }
     if (save_file[0]=='|') {
-#ifdef PIPES
+#if defined(PIPES)
 	restrict_popen();
 	fp = popen(save_file+1,"w");
 	ispipe = TRUE;
 #else
-	int_error(c_token-1, "this copy of gnuplot does not support piped output");
+	int_error(c_token-1, "This copy of gnuplot does not support piped output");
 #endif
     } else {
     gp_expand_tilde(&save_file);
@@ -2820,7 +2824,7 @@ save_command()
     }
 
     if (stdout != fp) {
-#ifdef PIPES
+#if defined(PIPES)
 	if (save_file[0] == '|')
 	    (void) pclose(fp);
 	else

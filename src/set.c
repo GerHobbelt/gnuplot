@@ -1468,6 +1468,8 @@ set_contourfill(void)
 	    contourfill.nslices = 0;
 	    while (!END_OF_COMMAND && (N < MAX_ZSLICES)) {
 		zslice *slice = &contourfill.slices[N];
+		if (equals(c_token, ","))
+		    c_token++;
 		if (!equals(c_token++,"["))
 		    int_error(NO_CARET, errmsg);
 		slice->zlow = parse_one_range_limit(
@@ -1476,8 +1478,6 @@ set_contourfill(void)
 		slice->color.type = TC_RGB;
 		slice->color.rgbcolor = parse_color_name();
 		N++;
-		if (!equals(c_token++,","))
-		    break;
 	    }
 	    contourfill.nslices = N;
 	} else
@@ -1619,29 +1619,11 @@ set_dgrid3d()
 
     c_token++;
 
-#ifdef BACKWARD_COMPATIBILITY
-    /* Accommodate ancient deprecated syntax "set dgrid3d ,,<normval>" */
-    if (equals(c_token,",") && equals(c_token+1,",")) {
-	c_token += 2;
-	dgrid3d_mode = DGRID3D_QNORM;
-	dgrid3d_norm_value = int_expression();
-	dgrid3d = TRUE;
-	return;
-    }
-#endif
-
     if (might_be_numeric(c_token)) {
 	gridx = gridy = int_expression();
 	if (equals(c_token, ",")) {
 	    c_token++;
 	    gridy = int_expression();
-#ifdef BACKWARD_COMPATIBILITY
-	    /* Deprecated syntax using 3 numeric parameters and no keywords */
-	    if (equals(c_token, ",")) {
-		c_token++;
-		normval = int_expression();
-	    }
-#endif
 	}
     }
 

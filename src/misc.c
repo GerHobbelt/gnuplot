@@ -337,6 +337,9 @@ load_file(FILE *fp, char *name, int calltype)
 		    }
 		    safe_strncpy(&(gp_input_line[start]), *datablock_input_line, left);
 		    len = strlen(gp_input_line);
+		    /* strip trailing whitespace */
+		    while (len > 0 && isblank(gp_input_line[len-1]))
+			gp_input_line[len--] = '\0';
 		    left = gp_input_line_len - len;
 		    datablock_input_line++;
 		}
@@ -355,6 +358,9 @@ load_file(FILE *fp, char *name, int calltype)
 		    if (gp_input_line[len] == '\r') {	/* remove any carriage return */
 			gp_input_line[len--] = '\0';
 		    }
+		    /* Remove trailing whitespace leading up to the newline */
+		    while (len > 0 && isblank(gp_input_line[len]))
+			gp_input_line[len--] = '\0';
 		}
 		start = len+1;
 		left = gp_input_line_len - start;
@@ -559,7 +565,7 @@ lf_push(FILE *fp, char *name, char *cmdline)
     lf->call_argc = call_argc;
 
     lf->depth = lf_head ? lf_head->depth+1 : 1;	/* recursion depth */
-    if (lf->depth > STACK_DEPTH)
+    if (lf->depth > MAX_RECURSION_DEPTH)
 	int_error(NO_CARET, "load/eval nested too deeply");
 
     /* call/load/functionblock all establish a new scope for local variables.

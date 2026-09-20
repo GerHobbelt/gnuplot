@@ -494,6 +494,15 @@ D viridis 1
 ## plots and perform incremental pan/zoom steps for 2D plots.
 #end
 
+3 WebAssembly + WASI platform support
+?WASI
+?WebAssembly
+ The configure script now has an option to cross-compile gnuplot into
+ machine-independent WebAssembly byte code (Wasm) with hooks to communicate to
+ the runtime environment using the WASI API protocol.
+      ./configure --host=wasm32-wasi --with-wasi-sysroot=${WASI}
+ See the INSTALL file for more guidance.
+
 3 Watchpoints
 ?new watchpoints
  Watchpoints are target values associated with individual plots in a graph.
@@ -704,14 +713,15 @@ D epi_data 1
 ## See `delaunay`.
 #b Alternatives to gdlib for handling image files as data
 #b Deprecation of the "sample" keyword
-#b New numerical operation "prod" (cumulative product). See `product`.
-## Example:     N! == prod [i=1:N] i 
+#b New numerical operation "prod" (cumulative product). See `product`. (in 6.0.5)
+#TeX \newline
+## Example:     N! can be expressed as prod [i=1:N] i 
 #b New category of graphical objects called "marks" that allow definition
 ## of complex symbols used in plots.  See `marks`.
 #b See `escape sequences`.
 ## Unicode escape sequences are accepted in both "enhanced" and "noenhanced" text.
 ## Unicode escape sequences are expanded during substring evaluation.
-## Octal escape sequences are required to contain exactly three digits.
+## Octal escape sequences are required to contain exactly three digits. (in 6.0.5)
 #b Named palette "magma" from the viridis family of palettes
 #b Multiplot mousing.  Mouse coordinate readout is provided for all panels of
 ## a multiplot.  Pan/zoom/rotate mouse operations can be applied to any panel.
@@ -1208,7 +1218,7 @@ C  need @ in table, so end and restart the table !
  rather than "\", but (S eq S[1:*]) evaluates to FALSE because S holds the
  unprocessed escape sequence while evaluation of S[1:*] replaces the escape
  sequence with the UTF-8 byte sequence for Σ.
- Both will display as "A + Σ B" when used in a plot.
+ Both S and S[1:*] will display as "A + Σ B" when used in a plot.
 
 2 Environment
 ?environment
@@ -1409,8 +1419,8 @@ Ffigure_E0
 ^<tr>    <td>EllipticK(k)</td>    <td>real k in (-1:1)</td>    <td><i>K(k)</i> complete elliptic integral of the first kind</td></tr>
 ^<tr>    <td>EllipticE(k)</td>    <td>real k in [-1:1]</td>    <td><i>E(k)</i> complete elliptic integral of the second kind</td></tr>
 ^<tr>    <td>EllipticPi(n,k)</td>    <td> real n&lt;1, real k in (-1:1)</td>    <td> &Pi;(<i>n,k</i>) complete elliptic integral of the third kind</td></tr>
-^<tr>    <td>erf(x)</td>    <td>any</td>    <td>erf(Re(<i>x</i>)), error function of real(<i>x</i>)</td></tr>
-^<tr>    <td>erfc(x)</td>    <td>any</td>    <td>erfc(Re(<i>x</i>)), 1.0 - error function of real(<i>x</i>)</td></tr>
+^<tr>    <td>erf(x)</td>    <td>real</td>    <td>erf(Re(<i>x</i>)), error function of real(<i>x</i>)</td></tr>
+^<tr>    <td>erfc(x)</td>    <td>real</td>    <td>erfc(Re(<i>x</i>)), 1.0 - error function of real(<i>x</i>)</td></tr>
 ^<tr>    <td>exp(x)</td>    <td>any</td>    <td><i>e<sup>x</sup></i>, exponential function of <i>x</i></td></tr>
 ^<tr>    <td>expint(n,x)</td>    <td>any</td>    <td><i>E<sub>n</sub></i>(<i>x</i>), exponential integral function of <i>x</i></td></tr>
 ^<tr>    <td>floor(x)</td>    <td>any</td>    <td>&lfloor;<i>x</i>&rfloor;, largest integer not greater than <i>x</i> (real part)</td></tr>
@@ -1771,19 +1781,19 @@ C ?expressions functions ceil
 4 erf
 ?expressions functions erf
 ?erf
-#erf(x) &  ~~  & ~ & $\mbox{erf}(\mbox{real}(x))$,  error function of real($x$) \\
-%erf(x)@ ~~ @$erf ( roman real (x))$, error function of real ($x$)
+#erf(x) & real & ~ & $\mbox{erf}(\mbox{real}(x))$,  error function of real($x$) \\
+%erf(x)@ real @$erf ( roman real (x))$, error function of real ($x$)
  The `erf(x)` function returns the error function of the real part of its
  argument.  If the argument is a complex value, the imaginary component is
  ignored.  See `cerf`, `erfc`, `inverf`, and `norm`.
 4 erfc
 ?expressions functions erfc
 ?erfc
-#erfc(x) &  ~~  & ~ & $\mbox{erfc}(\mbox{real}(x))$,  1.0 - error function of real($x$) \\
-%erfc(x)@ ~~ @$erfc ( roman real (x))$, 1.0 - error function of real ($x$)
+#erfc(x) & real & ~ & $\mbox{erfc}(\mbox{real}(x))$,  1.0 - error function of real($x$) \\
+%erfc(x)@ real @$erfc ( roman real (x))$, 1.0 - error function of real ($x$)
  The `erfc(x)` function returns 1.0 - the error function of the real part of
- its argument.  If the argument is a complex value, the imaginary component is
- ignored.  See `cerf`, `erf`, `inverf`, and `norm`.
+ its argument.  If the argument is a complex value, the imaginary component
+ is ignored.  See `cerf`, `erf`, `inverf`, and `norm`.
 4 exp
 ?expressions functions exp
 ?exp
@@ -2044,7 +2054,11 @@ C 4 zeta
 %erfi(x)@real@imaginary error function erfi(x) = -i * erf(ix)
 #erfi(x)&real&~&imaginary error function $erf(x) = -i * erf(ix)$ \\
  Imaginary error function erfi(x) = -i * erf(ix)
- Requires external library libcerf.
+ `erfi(x)` returns the imaginary error function of a real argument.
+ If the argument is a complex value, the imaginary component is ignored.
+ To obtain the complex imaginary error function of a complex argument,
+ define a function cerfi(z) = -I * cerf(I*z).
+ Requires external library libcerf.  See `libcerf`, `cerf`.
 ??
 C 4 FresnelC
 %FresnelC(x)@real@ C(x) = integral[0;x] cos(pi/2 t^2)dt
@@ -4973,7 +4987,7 @@ Ffigure_parametric_marks
 #b Enhanced text processing can be used for both double-quoted text and
 ## single-quoted text.
 #b Octal escape sequences \ooo are processed in single-quoted strings only
-## if enhanced text is enabled.  Octal escapes are always process in
+## if enhanced text is enabled.  Octal escapes are always processed in
 ## double-quoted strings.
 #end
 

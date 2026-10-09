@@ -1024,7 +1024,7 @@ void wxtPanel::Draw()
 	DrawToDC(buffered_dc, region);
 #ifdef GDK_WINDOWING_WAYLAND
 	/* Refresh() is necessary with the gdk wayland backend (as opposed to x11).
-	 * Unfortunately this is not sufficient to force drawing of temporary
+	 * Unfortunately this call is not sufficient to force drawing of temporary
 	 * elements such as the zoom box.
 	 */
 	if (wxGetDisplayInfo().type == wxDisplayWayland)
@@ -1048,7 +1048,6 @@ void wxtPanel::DrawToDC(wxDC &dc, wxRegion &region)
 		vW = upd.GetW();
 		vH = upd.GetH();
 
-		FPRINTF((stderr,"OnPaint %d,%d,%d,%d\n",vX,vY,vW,vH));
 		/* Repaint this rectangle */
 		if (gdkpixmap)
 			gdk_draw_drawable(dc.GetWindow(),
@@ -1095,9 +1094,17 @@ void wxtPanel::DrawToDC(wxDC &dc, wxRegion &region)
 		dc.DrawLine( mouse_x, zoom_y1, mouse_x, mouse_y );
 		dc.DrawLine( mouse_x, mouse_y, zoom_x1, mouse_y );
 		dc.DrawLine( zoom_x1, mouse_y, zoom_x1, zoom_y1 );
+
+#ifdef HAVE_GTK
+		/* GTK does not support wxAND */
+		dc.SetPen( *wxTRANSPARENT_PEN );
+		dc.SetBrush( wxBrush( wxT("LIGHT BLUE"), wxBRUSHSTYLE_CROSSDIAG_HATCH ) );
+#else
 		dc.SetPen( *wxTRANSPARENT_PEN );
 		dc.SetBrush( wxBrush( wxT("LIGHT BLUE"), wxBRUSHSTYLE_SOLID ) );
 		dc.SetLogicalFunction( wxAND );
+#endif /* HAVE_GTK */
+
 		dc.DrawRectangle( zoom_x1, zoom_y1, mouse_x -zoom_x1, mouse_y -zoom_y1);
 		dc.SetLogicalFunction( wxCOPY );
 
@@ -1115,8 +1122,15 @@ void wxtPanel::DrawToDC(wxDC &dc, wxRegion &region)
 		dc.DrawText( zoom_string2.AfterFirst(wxT('\r')),
 			mouse_x, mouse_y);
 
-		/* if we have to redraw the zoombox, it is with another size,
-		 * so it will be issued later and we can disable it now */
+		/* If we have to redraw the zoombox, it is with another size,
+		 * so it will be issued later and we can disable it now.
+		 * This does not work under wayland, which requires a refresh every time.
+		 */
+#ifdef GDK_WINDOWING_WAYLAND
+		if (wxGetDisplayInfo().type == wxDisplayWayland) {
+			return;
+		} else
+#endif
 		wxt_zoombox = false;
 	}
 
@@ -2095,9 +2109,6 @@ void wxt_graphics()
 
 	/* Clear the count of hypertext anchor points */
 	wxt_n_anchors = 0;
-
-	FPRINTF((stderr,"Graphics xmax %d ymax %d v_char %d h_char %d\n",
-		term->xmax, term->ymax, term->v_char, term->h_char));
 }
 
 void wxt_text()
@@ -3927,12 +3938,10 @@ void wxt_atexit()
 	/* declare the iterator */
 	std::vector<wxt_window_t>::iterator wxt_iter;
 
-	int i;
-	for(wxt_iter = wxt_window_list.begin(), i=0;
-			wxt_iter != wxt_window_list.end(); wxt_iter++, i++)
+	for (wxt_iter = wxt_window_list.begin();
+			wxt_iter != wxt_window_list.end(); wxt_iter++)
 	{
 		TBOOLEAN state = wxt_iter->frame->IsShown();
-		FPRINTF((stderr,"\tChecking window %d : %s shown\n", i, state?"":"not "));
 		if (state) {
 			openwindows++;
 			/* Disable any toolbar widgets that would require parental help */
